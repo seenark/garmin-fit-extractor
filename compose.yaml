@@ -1,0 +1,13 @@
+services:
+  app:
+    image: hadesgod/garmin-fit-extractor:${GARMIN_FIT_TAG:-latest}
+    ports:
+      - "${GARMIN_FIT_PORT:-3000}:3000"
+    volumes:
+      - garmin_fit_data:/data
+    restart: unless-stopped
+    stop_grace_period: 30s
+
+volumes:
+  garmin_fit_data:
+    name: garmin_fit_data

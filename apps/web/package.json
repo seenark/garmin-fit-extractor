@@ -1,0 +1,27 @@
+{
+  "name": "@garmin-fit-extractor/web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "check": "tsc --noEmit",
+    "test": "bun test src/lib/*.test.ts"
+  },
+  "dependencies": {
+    "@tanstack/react-router": "^1.170.17",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7"
+  },
+  "devDependencies": {
+    "@tanstack/router-plugin": "^1.168.19",
+    "@playwright/test": "^1.58.2",
+    "@types/bun": "^1.3.10",
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.0.3",
+    "typescript": "^6.0.2",
+    "vite": "^8.1.3"
+  }
+}

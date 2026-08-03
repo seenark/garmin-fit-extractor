@@ -3,3 +3,11 @@ dist/
 *.fit
 analysis.json
 .DS_Store
+target/
+apps/web/dist/
+data/*.sqlite*
+.env
+playwright-report/
+test-results/
+apps/api/tests/fixtures/activity.fit
+!apps/api/tests/fixtures/activity.fit

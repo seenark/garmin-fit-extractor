@@ -1,5 +1,5 @@
-import type { Analysis } from "./schema.js";
 import type { FitMessage, FitMessages } from "./fit.js";
+import type { Analysis } from "./schema.js";
 
 const round = (value: number | null, digits = 2): number | null => {
   if (value === null || !Number.isFinite(value)) return null;
