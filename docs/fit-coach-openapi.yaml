@@ -1,0 +1,134 @@
+openapi: 3.1.0
+info:
+  title: FIT Coach Activity API
+  version: 1.0.0
+  description: Owner-scoped activity data for the FIT Coach Custom GPT.
+servers:
+  - url: https://fit.example.com
+security:
+  - fitCoachOAuth:
+      - activities:read
+paths:
+  /api/v1/activities/latest:
+    get:
+      operationId: getLatestActivity
+      parameters:
+        - $ref: '#/components/parameters/Detail'
+      responses:
+        '200':
+          description: Newest authenticated-user activity
+          content:
+            application/json: { schema: { $ref: '#/components/schemas/Activity' } }
+        '401': { description: Missing or invalid bearer token }
+        '403': { description: Insufficient OAuth scope }
+        '404': { description: No activity found }
+  /api/v1/activities:
+    get:
+      operationId: listActivities
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 20, default: 10 }
+      responses:
+        '200':
+          description: Authenticated-user activities
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/ActivitySummary' } }
+        '401': { description: Missing or invalid bearer token }
+        '403': { description: Insufficient OAuth scope }
+        '404': { description: No activity found }
+  /api/v1/activities/{activity_id}:
+    get:
+      operationId: getActivity
+      parameters:
+        - name: activity_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - $ref: '#/components/parameters/Detail'
+      responses:
+        '200':
+          description: Authenticated-user activity
+          content:
+            application/json: { schema: { $ref: '#/components/schemas/Activity' } }
+        '401': { description: Missing or invalid bearer token }
+        '403': { description: Insufficient OAuth scope }
+        '404': { description: Activity not found }
+components:
+  securitySchemes:
+    fitCoachOAuth:
+      type: oauth2
+      flows:
+        authorizationCode:
+          authorizationUrl: https://fit.example.com/oauth/authorize
+          tokenUrl: https://fit.example.com/oauth/token
+          scopes:
+            activities:read: Read authenticated activity data
+  parameters:
+    Detail:
+      name: detail
+      in: query
+      required: false
+      schema: { type: string, enum: [summary, laps], default: summary }
+      description: Summary scalars, or summary plus laps and heart-rate zones.
+  schemas:
+    ActivitySummary:
+      type: object
+      additionalProperties: false
+      properties:
+        activity_id: { type: string, format: uuid }
+        sport: { type: [string, 'null'] }
+        started_at: { type: string }
+        distance_m: { type: [number, 'null'] }
+        duration_s: { type: [integer, 'null'] }
+      required: [activity_id, started_at]
+    Activity:
+      type: object
+      additionalProperties: false
+      properties:
+        activity_id: { type: string, format: uuid }
+        sport: { type: [string, 'null'] }
+        started_at: { type: string }
+        distance_m: { type: [number, 'null'] }
+        duration_s: { type: [integer, 'null'] }
+        average_heart_rate: { type: [integer, 'null'] }
+        maximum_heart_rate: { type: [integer, 'null'] }
+        average_pace_s_per_km: { type: [number, 'null'] }
+        elevation_gain_m: { type: [number, 'null'] }
+        laps: { type: array, items: { $ref: '#/components/schemas/CoachLap' } }
+        heart_rate_zones: { type: array, items: { $ref: '#/components/schemas/CoachHeartRateZone' } }
+        derived_metrics: { $ref: '#/components/schemas/CoachDerivedMetrics' }
+      required: [activity_id, started_at, laps, heart_rate_zones, derived_metrics]
+    CoachLap:
+      type: object
+      additionalProperties: false
+      properties:
+        index: { type: integer }
+        start_time: { type: [string, 'null'] }
+        distance_m: { type: [number, 'null'] }
+        duration_s: { type: [integer, 'null'] }
+        moving_time_s: { type: [integer, 'null'] }
+        pace_s_per_km: { type: [number, 'null'] }
+        average_heart_rate: { type: [integer, 'null'] }
+        maximum_heart_rate: { type: [integer, 'null'] }
+        average_power_w: { type: [integer, 'null'] }
+        maximum_power_w: { type: [integer, 'null'] }
+        average_cadence_spm: { type: [number, 'null'] }
+        maximum_cadence_spm: { type: [number, 'null'] }
+      required: [index]
+    CoachHeartRateZone:
+      type: object
+      additionalProperties: false
+      properties:
+        zone: { type: integer }
+        min_bpm: { type: [integer, 'null'] }
+        max_bpm: { type: [integer, 'null'] }
+        duration_s: { type: [number, 'null'] }
+      required: [zone]
+    CoachDerivedMetrics:
+      type: object
+      additionalProperties: false
+      properties:
+        heart_rate_drift_percent: { type: [number, 'null'] }

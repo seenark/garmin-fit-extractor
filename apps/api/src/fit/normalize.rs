@@ -3,8 +3,8 @@ use serde_json::Value;
 
 use crate::model::RawFitRecord;
 use crate::model::{
-    Activity, Analysis, Cadence, Calories, Elevation, HeartRate, HeartRateZone, Lap, LapHeartRate,
-    Metric, Pace, Power, RunningDynamics, Summary, Temperature,
+    Analysis, Cadence, Calories, Elevation, HeartRate, HeartRateZone, Lap, LapHeartRate, Metric,
+    NormalizedActivity, Pace, Power, RunningDynamics, Summary, Temperature,
 };
 
 pub fn normalize(records: &[RawFitRecord], file_name: &str) -> Analysis {
@@ -37,7 +37,7 @@ pub fn normalize(records: &[RawFitRecord], file_name: &str) -> Analysis {
         source: crate::model::Source {
             file_name: file_name.into(),
         },
-        activity: Activity {
+        activity: NormalizedActivity {
             r#type: session
                 .string(&["sport"])
                 .or_else(|| activity.string(&["type"])),

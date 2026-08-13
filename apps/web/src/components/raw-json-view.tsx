@@ -1,8 +1,4 @@
-import { useMemo } from "react";
-
+import { useMemo, useState } from "react";
 import type { RawFitRecord } from "../lib/api-types";
-
-export function RawJsonView({ records }: { records: RawFitRecord[] }) {
-  const formatted = useMemo(() => JSON.stringify(records, null, 2), [records]);
-  return <pre data-testid="raw-json-view" aria-label="Raw decoded FIT JSON">{formatted}</pre>;
-}
+import { formatRawJson } from "../lib/raw-json";
+export function RawJsonView({ records }: { records: RawFitRecord[] }) { const formatted = useMemo(() => formatRawJson(records), [records]); const [status, setStatus] = useState<"idle"|"copied"|"failed">("idle"); return <><div className="actions"><button type="button" onClick={async () => { try { await navigator.clipboard.writeText(formatted); setStatus("copied"); } catch { setStatus("failed"); } }}>{status === "copied" ? "Copied" : "Copy raw JSON"}</button><span aria-live="polite">{status === "copied" ? "Copied" : status === "failed" ? <span role="alert">Copy failed</span> : null}</span></div><pre data-testid="raw-json-view" aria-label="Raw decoded FIT JSON">{formatted}</pre></>; }

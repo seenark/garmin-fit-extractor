@@ -37,6 +37,10 @@ impl ApiError {
         self
     }
 
+    pub const fn code(&self) -> &'static str {
+        self.code
+    }
+
     pub const fn invalid_multipart() -> Self {
         Self::new(
             StatusCode::BAD_REQUEST,
@@ -48,7 +52,7 @@ impl ApiError {
         Self::new(
             StatusCode::BAD_REQUEST,
             "EMPTY_BATCH",
-            "Upload at least one FIT file.",
+            "Upload at least one ZIP file.",
         )
     }
     pub const fn unknown_field() -> Self {
@@ -62,7 +66,7 @@ impl ApiError {
         Self::new(
             StatusCode::BAD_REQUEST,
             "TOO_MANY_FILES",
-            "Upload at most 10 FIT files.",
+            "Upload at most 10 ZIP files.",
         )
     }
     pub const fn request_too_large() -> Self {
@@ -76,14 +80,28 @@ impl ApiError {
         Self::new(
             StatusCode::BAD_REQUEST,
             "INVALID_FILE_NAME",
-            "File name must end with .fit and be at most 255 bytes.",
+            "File name must end with .zip and be at most 255 bytes.",
         )
     }
     pub const fn file_too_large() -> Self {
         Self::new(
             StatusCode::BAD_REQUEST,
             "FILE_TOO_LARGE",
-            "FIT file exceeds the 20 MiB limit.",
+            "Uploaded ZIP or extracted FIT member exceeds the 20 MiB limit.",
+        )
+    }
+    pub const fn invalid_zip() -> Self {
+        Self::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_ZIP",
+            "File is not a valid ZIP archive or failed its integrity check.",
+        )
+    }
+    pub const fn archive_limit_exceeded() -> Self {
+        Self::new(
+            StatusCode::BAD_REQUEST,
+            "ARCHIVE_LIMIT_EXCEEDED",
+            "ZIP archive exceeds the extracted FIT limits.",
         )
     }
     pub const fn invalid_fit() -> Self {
@@ -128,6 +146,13 @@ impl ApiError {
             "view must be normalized or raw.",
         )
     }
+    pub const fn invalid_activity_limit() -> Self {
+        Self::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_ACTIVITY_LIMIT",
+            "limit must be between 1 and 20.",
+        )
+    }
     pub const fn extraction_failed() -> Self {
         Self::new(
             StatusCode::CONFLICT,
@@ -154,6 +179,78 @@ impl ApiError {
             StatusCode::SERVICE_UNAVAILABLE,
             "SERVICE_UNAVAILABLE",
             "The service is temporarily unavailable.",
+        )
+    }
+}
+impl ApiError {
+    pub const fn auth_required() -> Self {
+        Self::new(
+            StatusCode::UNAUTHORIZED,
+            "AUTH_REQUIRED",
+            "Sign in with Google to continue.",
+        )
+    }
+    pub const fn auth_not_configured() -> Self {
+        Self::new(
+            StatusCode::SERVICE_UNAVAILABLE,
+            "AUTH_NOT_CONFIGURED",
+            "Google sign-in is not configured.",
+        )
+    }
+    pub const fn auth_provider_unavailable() -> Self {
+        Self::new(
+            StatusCode::SERVICE_UNAVAILABLE,
+            "AUTH_PROVIDER_UNAVAILABLE",
+            "Google sign-in is temporarily unavailable.",
+        )
+    }
+}
+impl ApiError {
+    pub const fn coach_not_configured() -> Self {
+        Self::new(
+            StatusCode::SERVICE_UNAVAILABLE,
+            "COACH_NOT_CONFIGURED",
+            "FIT Coach OAuth is not configured.",
+        )
+    }
+
+    pub const fn coach_authentication_failed() -> Self {
+        Self::new(
+            StatusCode::UNAUTHORIZED,
+            "COACH_AUTHENTICATION_FAILED",
+            "Bearer authentication failed.",
+        )
+    }
+
+    pub const fn coach_insufficient_scope() -> Self {
+        Self::new(
+            StatusCode::FORBIDDEN,
+            "INSUFFICIENT_SCOPE",
+            "The bearer token lacks activities:read scope.",
+        )
+    }
+
+    pub const fn activity_not_found() -> Self {
+        Self::new(
+            StatusCode::NOT_FOUND,
+            "ACTIVITY_NOT_FOUND",
+            "Activity was not found.",
+        )
+    }
+
+    pub const fn invalid_activity_detail() -> Self {
+        Self::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_ACTIVITY_DETAIL",
+            "detail must be summary or laps.",
+        )
+    }
+
+    pub const fn coach_processing_error() -> Self {
+        Self::new(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "COACH_PROCESSING_ERROR",
+            "The activity could not be processed.",
         )
     }
 }

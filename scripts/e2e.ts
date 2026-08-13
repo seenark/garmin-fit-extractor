@@ -30,8 +30,7 @@ function startProcess(
     env: environment,
     stdout: "pipe",
     stderr: "pipe",
-    stdin: "inherit",
-    detached: true,
+    stdin: "ignore",
   });
 
   return {
@@ -48,22 +47,14 @@ async function stopProcess(process: ManagedProcess): Promise<void> {
     return;
   }
 
-  try {
-    globalThis.process.kill(-process.child.pid, "SIGTERM");
-  } catch {
-    process.child.kill("SIGTERM");
-  }
+  process.child.kill("SIGTERM");
 
   const stopped = await Promise.race([
     process.child.exited.then(() => true),
     Bun.sleep(5_000).then(() => false),
   ]);
   if (!stopped && process.child.exitCode === null) {
-    try {
-      globalThis.process.kill(-process.child.pid, "SIGKILL");
-    } catch {
-      process.child.kill("SIGKILL");
-    }
+    process.child.kill("SIGKILL");
     await process.child.exited;
   }
 }
@@ -103,18 +94,33 @@ async function waitForHealth(api: ManagedProcess, web: ManagedProcess): Promise<
 }
 
 async function run(): Promise<void> {
-  const temporaryDirectory = await mkdtemp(join(tmpdir(), "garmin-fit-extractor-e2e-"));
+  const temporaryDirectory = await mkdtemp(
+    join(tmpdir(), "garmin-fit-extractor-e2e-"),
+  );
   const databasePath = join(temporaryDirectory, "garmin-fit-extractor.sqlite3");
   const databaseUrl = `sqlite://${databasePath}`;
   const environment = {
     ...process.env,
     GARMIN_FIT_BIND: apiAddress,
     GARMIN_FIT_DATABASE_URL: databaseUrl,
+    GARMIN_FIT_TEST_AUTH: "true",
   };
+  const cargoTargetDirectory = resolve(
+    repositoryRoot,
+    environment.CARGO_TARGET_DIR ?? "target",
+  );
   const started: ManagedProcess[] = [];
   let failure: unknown;
 
   try {
+    const build = Bun.spawn(
+      [cargo, "build", "-p", "garmin-fit-extractor-api"],
+      { cwd: repositoryRoot, env: environment, stdout: "inherit", stderr: "inherit" },
+    );
+    if ((await build.exited) !== 0) {
+      throw new Error("API build failed.");
+    }
+
     const browser = startProcess(
       "Playwright browser installation",
       [bunx, "--no-install", "playwright", "install", "chromium"],
@@ -128,7 +134,7 @@ async function run(): Promise<void> {
 
     const api = startProcess(
       "API",
-      [cargo, "run", "-p", "garmin-fit-extractor-api"],
+      [resolve(cargoTargetDirectory, "debug/garmin-fit-extractor-api")],
       environment,
     );
     started.push(api);

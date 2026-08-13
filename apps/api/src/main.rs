@@ -1,7 +1,8 @@
-use std::{error::Error, path::Path};
+use std::{error::Error, path::Path, sync::Arc};
 
 use garmin_fit_extractor_api::{
     app::{AppState, router},
+    auth::AuthState,
     config::Config,
     db,
 };
@@ -20,8 +21,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
     ensure_database_parent(&config.database_url)?;
     let db = db::connect(&config.database_url).await?;
     let listener = TcpListener::bind(config.bind).await?;
+    let auth = Arc::new(AuthState::new(config.google, config.coach_oauth));
+
     tracing::info!(address = %config.bind, "listening for Garmin FIT extractor requests");
-    axum::serve(listener, router(AppState { db }, config.static_dir))
+    axum::serve(listener, router(AppState { db, auth }, config.static_dir))
         .with_graceful_shutdown(shutdown_signal())
         .await?;
     Ok(())

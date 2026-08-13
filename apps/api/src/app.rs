@@ -1,18 +1,17 @@
-use std::path::PathBuf;
-
+use crate::{auth::AuthState, error::ApiError, routes};
 use axum::{Router, extract::State, response::Json, routing::get};
 use serde::Serialize;
 use sqlx::SqlitePool;
+use std::path::PathBuf;
+use std::sync::Arc;
 use tower_http::{
     services::{ServeDir, ServeFile},
     trace::TraceLayer,
 };
-
-use crate::{error::ApiError, routes};
-
 #[derive(Clone)]
 pub struct AppState {
     pub db: SqlitePool,
+    pub auth: Arc<AuthState>,
 }
 
 pub fn router(state: AppState, static_dir: PathBuf) -> Router {

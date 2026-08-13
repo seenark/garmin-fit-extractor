@@ -1,8 +1,23 @@
 services:
   app:
-    image: hadesgod/garmin-fit-extractor:${GARMIN_FIT_TAG:-latest}
+    image: ${GARMIN_FIT_IMAGE:-hadesgod/garmin-fit-extractor}:${GARMIN_FIT_TAG:-latest}
+    platform: linux/amd64
+    build:
+      context: .
+      dockerfile: Dockerfile
     ports:
       - "${GARMIN_FIT_PORT:-3000}:3000"
+    environment:
+      GARMIN_FIT_BIND: ${GARMIN_FIT_BIND:-0.0.0.0:3000}
+      GARMIN_FIT_DATABASE_URL: ${GARMIN_FIT_DATABASE_URL:-sqlite:///data/garmin-fit-extractor.sqlite3}
+      GARMIN_FIT_STATIC_DIR: ${GARMIN_FIT_STATIC_DIR:-/app/public}
+      GARMIN_FIT_GOOGLE_CLIENT_ID: ${GARMIN_FIT_GOOGLE_CLIENT_ID:-}
+      GARMIN_FIT_GOOGLE_CLIENT_SECRET: ${GARMIN_FIT_GOOGLE_CLIENT_SECRET:-}
+      GARMIN_FIT_GOOGLE_REDIRECT_URI: ${GARMIN_FIT_GOOGLE_REDIRECT_URI:-}
+      GARMIN_FIT_CHATGPT_CLIENT_ID: ${GARMIN_FIT_CHATGPT_CLIENT_ID:-}
+      GARMIN_FIT_CHATGPT_CLIENT_SECRET: ${GARMIN_FIT_CHATGPT_CLIENT_SECRET:-}
+      GARMIN_FIT_CHATGPT_REDIRECT_URI: ${GARMIN_FIT_CHATGPT_REDIRECT_URI:-}
+      RUST_LOG: ${RUST_LOG:-info}
     volumes:
       - garmin_fit_data:/data
     restart: unless-stopped

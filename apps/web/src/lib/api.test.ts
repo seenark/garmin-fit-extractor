@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test";
 
-import { ApiError, listExtractions } from "./api";
+import { ApiError, getCurrentUser, listExtractions } from "./api";
 
 const originalFetch = globalThis.fetch;
 
@@ -10,14 +10,35 @@ afterEach(() => {
 
 describe("API client", () => {
   test("uses a same-origin history URL and returns parsed history", async () => {
-    const calls: RequestInfo[] = [];
-    globalThis.fetch = (async (input: RequestInfo) => {
-      calls.push(input);
+    const calls: Array<{ input: RequestInfo; init?: RequestInit }> = [];
+    globalThis.fetch = (async (input: RequestInfo, init?: RequestInit) => {
+      calls.push({ input, init });
       return Response.json({ items: [], total: 0, limit: 50, offset: 0 });
     }) as typeof fetch;
 
-    await expect(listExtractions()).resolves.toEqual({ items: [], total: 0, limit: 50, offset: 0 });
-    expect(calls).toEqual(["/api/v1/extractions?limit=50&offset=0"]);
+    await expect(listExtractions()).resolves.toEqual({
+      items: [],
+      total: 0,
+      limit: 50,
+      offset: 0,
+    });
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.input).toBe(
+      "/api/v1/extractions?limit=50&offset=0&order=desc",
+    );
+    expect(calls[0]?.init).toMatchObject({ credentials: "same-origin" });
+  });
+
+  test("loads the nullable current-user envelope with same-origin credentials", async () => {
+    const calls: Array<{ input: RequestInfo; init?: RequestInit }> = [];
+    globalThis.fetch = (async (input: RequestInfo, init?: RequestInit) => {
+      calls.push({ input, init });
+      return Response.json({ user: null });
+    }) as typeof fetch;
+
+    await expect(getCurrentUser()).resolves.toEqual({ user: null });
+    expect(calls[0]?.input).toBe("/api/v1/auth/me");
+    expect(calls[0]?.init).toMatchObject({ credentials: "same-origin" });
   });
 
   test("turns the standard error envelope into ApiError", async () => {

@@ -3,10 +3,10 @@
 Garmin FIT Extractor is a Bun workspace containing:
 
 - `@garmin-fit-extractor/cli`, the preserved `garmin-coach analyze` CLI.
-- A TanStack Router React web UI for uploads, history, normalized analysis, and raw decoded JSON.
-- An Axum + SQLite API that decodes batches of FIT files and serves the UI from the same origin.
+- A TanStack Router React web UI for ZIP uploads, per-user history, normalized analysis, and raw decoded JSON.
+- An Axum + SQLite API that authenticates users with Google and extracts FIT members from ZIP archives.
 
-The service stores only normalized/raw JSON and extraction metadata. Original FIT bytes, temporary upload files, and client paths are never retained.
+The service stores only normalized/raw JSON and extraction metadata. Original ZIP/FIT bytes, temporary upload files, and client paths are never retained.
 
 ## Requirements
 
@@ -26,7 +26,7 @@ bun run build
 bun run test:e2e
 ```
 
-The web development server proxies `/api` and `/healthz` to Axum at `127.0.0.1:3000`. Production is same-origin and does not configure CORS or application authentication. Put the unauthenticated service behind a trusted homelab network and an authenticated/TLS reverse proxy before exposing it publicly.
+The web development server proxies `/api` and `/healthz` to Axum at `127.0.0.1:3000`. Production uses same-origin Google authentication and does not configure CORS. Set the Google OAuth variables before exposing the service publicly and use TLS so the callback and session cookie remain protected.
 
 ## Preserved CLI
 
@@ -42,26 +42,37 @@ The CLI writes two-space JSON ending in a newline, preserves `schemaVersion: "1.
 
 The Axum API listens on `GARMIN_FIT_BIND` (default `0.0.0.0:3000`) and exposes:
 
-- `POST /api/v1/extractions` with repeated multipart `files` fields.
-- `GET /api/v1/extractions?limit=50&offset=0` and `GET /api/v1/extractions/{id}`.
+- `GET /api/v1/auth/login` and `GET /api/v1/auth/callback` for Google OAuth.
+- `GET /api/v1/auth/me` and `POST /api/v1/auth/logout` for the current session.
+- `POST /api/v1/extractions` with repeated multipart `files` fields containing ZIP archives.
+- `GET /api/v1/extractions?limit=50&offset=0&order=desc` and `GET /api/v1/extractions/{id}`.
 - `GET /api/v1/extractions/{id}/download?view=normalized|raw`.
 - `DELETE /api/v1/extractions/{id}` and `DELETE /api/v1/extractions`.
-- `GET /healthz`.
+- `GET /healthz` (public).
 
-Uploads accept 1–10 files. Each file must have a case-insensitive `.fit` suffix and is limited to 20 MiB. The request body limit is 210 MiB, leaving multipart framing overhead for ten maximum-size files. Invalid names, oversized files, and CRC/decode failures are persisted as independent failed extraction rows; valid siblings still complete. Per-file errors are `INVALID_FILE_NAME`, `FILE_TOO_LARGE`, or `INVALID_FIT`.
+All extraction routes require a valid Google session. Uploads accept 1–10 archives. Each archive must have a case-insensitive `.zip` suffix and is limited to 20 MiB compressed. The request body limit is 210 MiB. Each archive may contain at most 50 FIT members, each at most 20 MiB uncompressed, with a 100 MiB total uncompressed FIT limit. Invalid names, oversized files, invalid archives, no-FIT archives, and FIT decode/CRC failures are persisted as independent failed rows; valid siblings still complete. Per-file errors include `INVALID_FILE_NAME`, `FILE_TOO_LARGE`, `INVALID_ZIP`, `ARCHIVE_LIMIT_EXCEEDED`, `NO_FIT_FILES`, or `INVALID_FIT`.
 
-Failed rows retain a stable error code/message and null JSON views. Successful rows retain compact normalized and raw JSON. History is manually retained until deleted; no automatic expiration exists.
+Successful rows retain compact normalized and raw JSON. Failed rows retain a stable error code/message and null JSON views. History is scoped to the signed-in user, ordered by activity date with undated rows last, and manually retained until deleted.
 
 ## Configuration
 
 | Variable | Default | Purpose |
-| --- | --- | --- |
+| `GARMIN_FIT_IMAGE` | `hadesgod/garmin-fit-extractor` | Docker image repository used by Compose |
+| `GARMIN_FIT_TAG` | `latest` | Docker image tag used by Compose |
+| `GARMIN_FIT_PORT` | `3000` | Host port published by Compose |
 | `GARMIN_FIT_BIND` | `0.0.0.0:3000` | Axum bind address |
 | `GARMIN_FIT_DATABASE_URL` | `sqlite://data/garmin-fit-extractor.sqlite3` | SQLite database |
 | `GARMIN_FIT_STATIC_DIR` | `apps/web/dist` | Built SPA directory |
+| `GARMIN_FIT_GOOGLE_CLIENT_ID` | unset | Google OAuth client ID |
+| `GARMIN_FIT_GOOGLE_CLIENT_SECRET` | unset | Google OAuth client secret |
+| `GARMIN_FIT_GOOGLE_REDIRECT_URI` | unset | Exact browser-visible OAuth callback URL |
+| `GARMIN_FIT_CHATGPT_CLIENT_ID` | unset | FIT Coach OAuth client ID (`FIT_COACH_CHATGPT`) |
+| `GARMIN_FIT_CHATGPT_CLIENT_SECRET` | unset | FIT Coach OAuth client secret |
+| `GARMIN_FIT_CHATGPT_REDIRECT_URI` | unset | Exact OAuth callback URL shown by the GPT editor |
+| `GARMIN_FIT_TEST_AUTH` | unset | Debug-only test login switch; ignored by release builds |
 | `RUST_LOG` | `info` | tracing filter |
 
-The API creates the database parent directory, enables SQLite WAL mode, and uses a five-second busy timeout.
+The three Google variables are all-or-none. If none are set, the service starts but Google login returns `AUTH_NOT_CONFIGURED`; a partial group is a configuration error. Sessions use a fixed 30-day lifetime. The development callback is `http://127.0.0.1:5173/api/v1/auth/callback` through the Vite proxy.
 
 ## Local Docker deployment
 
@@ -73,7 +84,7 @@ GARMIN_FIT_TAG=local docker compose up -d
 curl --fail http://localhost:3000/healthz
 ```
 
-`compose.yaml` uses the image `hadesgod/garmin-fit-extractor:${GARMIN_FIT_TAG:-latest}`, publishes `${GARMIN_FIT_PORT:-3000}`, and persists SQLite in the stable Docker volume `garmin_fit_data`. Recreate without `-v` to verify persistence:
+`compose.yaml` uses the image `hadesgod/garmin-fit-extractor:${GARMIN_FIT_TAG:-latest}`, publishes `${GARMIN_FIT_PORT:-3000}`, maps the Google OAuth and runtime variables into the container, and persists SQLite in the stable Docker volume `garmin_fit_data`. Recreate without `-v` to verify persistence:
 
 ```bash
 docker compose down
@@ -91,7 +102,30 @@ docker buildx build \
   --push .
 ```
 
-On Ubuntu, install Docker Engine and the Compose plugin, copy `compose.yaml`, create `.env` containing exactly `GARMIN_FIT_TAG=0.1.0` and `GARMIN_FIT_PORT=3000`, then run `docker compose pull && docker compose up -d`. Keep TLS and remote authentication at the existing reverse proxy.
+On Ubuntu, install Docker Engine and the Compose plugin, copy `compose.yaml`, create `.env` containing the image/tag/port and Google variables, then run `docker compose pull && docker compose up -d`. Set `GARMIN_FIT_GOOGLE_REDIRECT_URI` to the public API callback URL and keep TLS enabled.
+
+## FIT Coach
+
+FIT Coach exposes owner-scoped activity data to a private Custom GPT through the handwritten contract in [`docs/fit-coach-openapi.yaml`](docs/fit-coach-openapi.yaml). The public hostname is one shared base: `https://fit.example.com/oauth/authorize`, `https://fit.example.com/oauth/token`, and the OpenAPI server all use `https://fit.example.com`. Keep the existing Google callback at `https://fit.example.com/api/v1/auth/callback`.
+
+Set all three FIT Coach variables in the deployment environment (never commit secrets):
+
+```dotenv
+GARMIN_FIT_CHATGPT_CLIENT_ID=FIT_COACH_CHATGPT
+GARMIN_FIT_CHATGPT_CLIENT_SECRET=
+GARMIN_FIT_CHATGPT_REDIRECT_URI=
+```
+
+The GPT editor sequence is **Configure -> Actions -> Create new action -> Authentication -> OAuth**. Configure Client ID `FIT_COACH_CHATGPT`, the client secret, authorization URL `https://fit.example.com/oauth/authorize`, token URL `https://fit.example.com/oauth/token`, scope `activities:read`, and request-body token exchange. Copy the callback URL displayed by the editor exactly into `GARMIN_FIT_CHATGPT_REDIRECT_URI` and its server allowlist. Import `docs/fit-coach-openapi.yaml` after setting these values.
+
+The Cloudflare route should map the public hostname to the application tunnel, which forwards to app port `3000`. Application routing handles `/oauth/*`, `/api/v1/*`, and the SPA/upload surface. Cloudflare Service Tokens are not user identity; FIT Coach identity comes only from OAuth and the authenticated browser session. Share the GPT by private link only with the two intended ChatGPT accounts, and verify activity access after connecting.
+
+No MCP server, Apps SDK, Plugin/App Directory publication, or OpenAI API is required. Keep client secrets and callback-specific deployment values out of committed files.
+
+คู่มือภาษาไทย:
+
+- [ทดสอบ FIT Coach ในเครื่อง](docs/fit-coach-local-testing-th.md)
+- [Deploy เว็บแบบ production-like โดยยังไม่เชื่อม Custom GPT](docs/deploy-manual-th.md)
 
 ## SQLite backup and restore
 
@@ -116,4 +150,4 @@ Verify `/healthz` and a known history ID after restore.
 
 ## FIT fixture attribution
 
-`apps/api/tests/fixtures/activity.fit` is copied from fitparser's MIT-licensed `tests/fixtures/Activity.fit` fixture and is used only for decoder, API, E2E, and container tests.
+`apps/api/tests/fixtures/activity.fit` and its ZIP archive are copied from fitparser's MIT-licensed `tests/fixtures/Activity.fit` fixture and are used only for decoder, API, E2E, and container tests.

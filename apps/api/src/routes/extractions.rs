@@ -14,7 +14,8 @@ use uuid::Uuid;
 
 use crate::{
     app::AppState,
-    db::{self, NewFailure, NewSuccess, StoredExtraction},
+    auth::AuthenticatedUser,
+    db::{self, HistoryOrder, NewFailure, NewSuccess, StoredExtraction},
     error::{ApiError, FitError},
     fit::{normalize::normalize, raw::decode_raw},
     model::{Analysis, BatchCreateResponse, ExtractionDetail, ExtractionStatus, RawFitRecord},
@@ -65,7 +66,6 @@ where
             .await
             .map_err(map_multipart_rejection)?;
         let mut uploads = Vec::new();
-
         while let Some(mut field) = multipart.next_field().await.map_err(map_multipart_error)? {
             if field.name() != Some("files") {
                 return Err(ApiError::unknown_field());
@@ -73,7 +73,6 @@ where
             if uploads.len() == MAX_FILES {
                 return Err(ApiError::too_many_files());
             }
-
             let supplied_name = field.file_name().map(str::to_owned);
             let mut bytes = Vec::new();
             let mut file_size_bytes = 0_u64;
@@ -88,7 +87,6 @@ where
                 too_large,
             });
         }
-
         if uploads.is_empty() {
             return Err(ApiError::empty_batch());
         }
@@ -96,13 +94,8 @@ where
     }
 }
 
-fn append_chunk(
-    bytes: &mut Vec<u8>,
-    file_size_bytes: &mut u64,
-    too_large: &mut bool,
-    chunk: Bytes,
-) {
-    *file_size_bytes = file_size_bytes.saturating_add(chunk.len() as u64);
+fn append_chunk(bytes: &mut Vec<u8>, size: &mut u64, too_large: &mut bool, chunk: Bytes) {
+    *size = size.saturating_add(chunk.len() as u64);
     if *too_large {
         return;
     }
@@ -121,7 +114,6 @@ fn map_multipart_rejection(error: MultipartRejection) -> ApiError {
         ApiError::invalid_multipart()
     }
 }
-
 fn map_multipart_error(error: axum::extract::multipart::MultipartError) -> ApiError {
     if error.status() == StatusCode::PAYLOAD_TOO_LARGE {
         ApiError::request_too_large()
@@ -133,74 +125,226 @@ fn map_multipart_error(error: axum::extract::multipart::MultipartError) -> ApiEr
 
 async fn create_extractions(
     State(state): State<AppState>,
+    crate::auth::AuthenticatedUser { user_id, .. }: crate::auth::AuthenticatedUser,
     UploadMultipart(uploads): UploadMultipart,
 ) -> Result<(StatusCode, Json<BatchCreateResponse>), ApiError> {
-    let mut items = Vec::with_capacity(uploads.len());
+    let mut items = Vec::new();
     for upload in uploads {
-        let file_name = stored_file_name(upload.supplied_name.as_deref());
-        let failure = if upload.too_large {
-            Some(("FILE_TOO_LARGE", "FIT file exceeds the 20 MiB limit."))
-        } else if !is_valid_file_name(&file_name) {
-            Some((
-                "INVALID_FILE_NAME",
-                "File name must end with .fit and be at most 255 bytes.",
-            ))
-        } else {
-            None
-        };
-
-        if let Some((code, message)) = failure {
-            let summary =
-                insert_failure(&state.db, file_name, upload.file_size_bytes, code, message).await?;
-            items.push(summary);
+        let archive_name = stored_file_name(upload.supplied_name.as_deref());
+        if upload.too_large {
+            items.push(
+                insert_failure(
+                    &state.db,
+                    user_id,
+                    archive_name,
+                    upload.file_size_bytes,
+                    "FILE_TOO_LARGE",
+                    "Uploaded ZIP or extracted FIT member exceeds the 20 MiB limit.",
+                )
+                .await?,
+            );
             continue;
         }
-
-        let file_size_bytes = upload.file_size_bytes;
-        let process_file_name = file_name.clone();
-        let processed = run_blocking(move || {
-            Ok::<_, ApiError>(process_upload(upload.bytes, process_file_name))
+        if !is_valid_file_name(&archive_name) {
+            items.push(
+                insert_failure(
+                    &state.db,
+                    user_id,
+                    archive_name,
+                    upload.file_size_bytes,
+                    "INVALID_FILE_NAME",
+                    "File name must end with .zip and be at most 255 bytes.",
+                )
+                .await?,
+            );
+            continue;
+        }
+        let archive_name_for_work = archive_name.clone();
+        let archive = match run_blocking(move || {
+            preflight_archive(upload.bytes, archive_name_for_work)
         })
-        .await?;
-        match processed {
-            Ok(processed) => {
-                let summary = db::insert_success(
-                    &state.db,
-                    NewSuccess {
-                        file_name: processed.file_name,
-                        file_size_bytes,
-                        activity_type: processed.activity_type,
-                        activity_date: processed.activity_date,
-                        normalized_json: processed.normalized_json,
-                        raw_json: processed.raw_json,
-                    },
-                )
-                .await
-                .map_err(|error| {
-                    tracing::error!(%error, "inserting successful extraction failed");
-                    ApiError::database_error()
-                })?;
-                items.push(summary);
+        .await
+        {
+            Ok(value) => value,
+            Err(error) => {
+                let (code, message) = if error.code() == "ARCHIVE_LIMIT_EXCEEDED" {
+                    (
+                        "ARCHIVE_LIMIT_EXCEEDED",
+                        "ZIP archive exceeds the extracted FIT limits.",
+                    )
+                } else {
+                    (
+                        "INVALID_ZIP",
+                        "File is not a valid ZIP archive or failed its integrity check.",
+                    )
+                };
+                vec![MemberResult::Failure {
+                    name: archive_name.clone(),
+                    size: upload.file_size_bytes,
+                    code,
+                    message,
+                }]
             }
-            Err(FitError::InvalidFit) => {
-                let summary = insert_failure(
-                    &state.db,
-                    file_name,
-                    file_size_bytes,
-                    "INVALID_FIT",
-                    "File is not a valid FIT file or failed its integrity check.",
-                )
-                .await?;
-                items.push(summary);
+        };
+        for result in archive {
+            match result {
+                MemberResult::Failure {
+                    name,
+                    size,
+                    code,
+                    message,
+                } => {
+                    items.push(insert_failure(&state.db, user_id, name, size, code, message).await?)
+                }
+                MemberResult::Success { bytes, name, size } => {
+                    let process_name = name.clone();
+                    let processed = run_blocking(move || {
+                        Ok::<_, ApiError>(process_upload(bytes, process_name))
+                    })
+                    .await?;
+                    match processed {
+                        Ok(p) => items.push(
+                            db::insert_success(
+                                &state.db,
+                                NewSuccess {
+                                    user_id,
+                                    file_name: p.file_name,
+                                    file_size_bytes: size,
+                                    activity_type: p.activity_type,
+                                    activity_date: p.activity_date,
+                                    normalized_json: p.normalized_json,
+                                    raw_json: p.raw_json,
+                                },
+                            )
+                            .await
+                            .map_err(|_| ApiError::database_error())?,
+                        ),
+                        Err(FitError::InvalidFit) => items.push(
+                            insert_failure(
+                                &state.db,
+                                user_id,
+                                name,
+                                size,
+                                "INVALID_FIT",
+                                "File is not a valid FIT file or failed its integrity check.",
+                            )
+                            .await?,
+                        ),
+                    }
+                }
             }
         }
     }
-
     Ok((StatusCode::CREATED, Json(BatchCreateResponse { items })))
+}
+
+enum MemberResult {
+    Success {
+        bytes: Vec<u8>,
+        name: String,
+        size: u64,
+    },
+    Failure {
+        name: String,
+        size: u64,
+        code: &'static str,
+        message: &'static str,
+    },
+}
+
+fn preflight_archive(bytes: Vec<u8>, archive_name: String) -> Result<Vec<MemberResult>, ApiError> {
+    use std::io::{Cursor, Read};
+    let archive_size = bytes.len() as u64;
+    let mut archive =
+        zip::ZipArchive::new(Cursor::new(bytes)).map_err(|_| ApiError::invalid_zip())?;
+    let mut selected = Vec::new();
+    let mut total = 0_u64;
+    for index in 0..archive.len() {
+        let entry = archive
+            .by_index(index)
+            .map_err(|_| ApiError::invalid_zip())?;
+        if entry.is_dir() || !entry.name().to_ascii_lowercase().ends_with(".fit") {
+            continue;
+        }
+        if entry.enclosed_name().is_none() {
+            return Err(ApiError::invalid_zip());
+        }
+        if selected.len() == 50 {
+            return Err(ApiError::archive_limit_exceeded());
+        }
+        let size = entry.size();
+        total = total.saturating_add(size);
+        let member = stored_file_name(Some(entry.name()));
+        if !is_valid_member_name(&member) {
+            return Err(ApiError::invalid_zip());
+        }
+        selected.push((index, member, size, size > MAX_FILE_BYTES as u64));
+        if total > 100 * 1024 * 1024 {
+            return Err(ApiError::archive_limit_exceeded());
+        }
+    }
+    if selected.is_empty() {
+        return Ok(vec![MemberResult::Failure {
+            name: archive_name,
+            size: archive_size,
+            code: "NO_FIT_FILES",
+            message: "ZIP archive contains no FIT files.",
+        }]);
+    }
+    let mut results = Vec::with_capacity(selected.len());
+    let mut actual_total = 0_u64;
+    for (index, member, size, too_large) in selected {
+        let display = format!("{}::{}", archive_name, member);
+        if too_large {
+            results.push(MemberResult::Failure {
+                name: display,
+                size,
+                code: "FILE_TOO_LARGE",
+                message: "Uploaded ZIP or extracted FIT member exceeds the 20 MiB limit.",
+            });
+            continue;
+        }
+        let entry = archive
+            .by_index(index)
+            .map_err(|_| ApiError::invalid_zip())?;
+        let mut data = Vec::with_capacity(size as usize);
+        let mut limited = entry.take(MAX_FILE_BYTES as u64 + 1);
+        let read_result = limited.read_to_end(&mut data);
+        actual_total = actual_total.saturating_add(data.len() as u64);
+        if actual_total > 100 * 1024 * 1024 {
+            return Err(ApiError::archive_limit_exceeded());
+        }
+        if read_result.is_err() {
+            results.push(MemberResult::Failure {
+                name: display,
+                size,
+                code: "INVALID_FIT",
+                message: "File is not a valid FIT file or failed its integrity check.",
+            });
+            continue;
+        }
+        if data.len() > MAX_FILE_BYTES {
+            results.push(MemberResult::Failure {
+                name: display,
+                size: data.len() as u64,
+                code: "FILE_TOO_LARGE",
+                message: "Uploaded ZIP or extracted FIT member exceeds the 20 MiB limit.",
+            });
+            continue;
+        }
+        let actual_size = data.len() as u64;
+        results.push(MemberResult::Success {
+            bytes: data,
+            name: display,
+            size: actual_size,
+        });
+    }
+    Ok(results)
 }
 
 async fn insert_failure(
     pool: &SqlitePool,
+    user_id: Uuid,
     file_name: String,
     file_size_bytes: u64,
     code: &str,
@@ -209,6 +353,7 @@ async fn insert_failure(
     db::insert_failure(
         pool,
         NewFailure {
+            user_id,
             file_name,
             file_size_bytes,
             error_code: code.to_owned(),
@@ -221,7 +366,6 @@ async fn insert_failure(
         ApiError::database_error()
     })
 }
-
 struct ProcessedUpload {
     file_name: String,
     activity_type: Option<String>,
@@ -276,15 +420,23 @@ fn is_valid_file_name(file_name: &str) -> bool {
     file_name != "invalid-file"
         && file_name.len() <= 255
         && !file_name.chars().any(char::is_control)
+        && file_name.to_ascii_lowercase().ends_with(".zip")
+}
+
+fn is_valid_member_name(file_name: &str) -> bool {
+    file_name != "invalid-file"
+        && file_name.len() <= 255
+        && !file_name.chars().any(char::is_control)
         && file_name.to_ascii_lowercase().ends_with(".fit")
 }
 
 async fn list_extractions(
     State(state): State<AppState>,
+    AuthenticatedUser { user_id, .. }: AuthenticatedUser,
     uri: Uri,
 ) -> Result<Json<crate::model::ExtractionPage>, ApiError> {
-    let (limit, offset) = parse_pagination(uri.query())?;
-    db::list(&state.db, limit, offset)
+    let (limit, offset, order) = parse_pagination(uri.query())?;
+    db::list(&state.db, user_id, limit, offset, order)
         .await
         .map(Json)
         .map_err(|error| {
@@ -293,9 +445,10 @@ async fn list_extractions(
         })
 }
 
-fn parse_pagination(query: Option<&str>) -> Result<(u32, u32), ApiError> {
-    let mut limit = 50_u32;
-    let mut offset = 0_u32;
+fn parse_pagination(query: Option<&str>) -> Result<(u32, u32, HistoryOrder), ApiError> {
+    let mut limit = 50;
+    let mut offset = 0;
+    let mut order = HistoryOrder::Desc;
     if let Some(query) = query {
         for pair in query.split('&') {
             let Some((key, value)) = pair.split_once('=') else {
@@ -308,6 +461,13 @@ fn parse_pagination(query: Option<&str>) -> Result<(u32, u32), ApiError> {
                 "offset" => {
                     offset = u32::from_str(value).map_err(|_| ApiError::invalid_pagination())?
                 }
+                "order" => {
+                    order = match value {
+                        "asc" => HistoryOrder::Asc,
+                        "desc" => HistoryOrder::Desc,
+                        _ => return Err(ApiError::invalid_pagination()),
+                    }
+                }
                 _ => {}
             }
         }
@@ -315,14 +475,15 @@ fn parse_pagination(query: Option<&str>) -> Result<(u32, u32), ApiError> {
     if !(1..=100).contains(&limit) {
         return Err(ApiError::invalid_pagination());
     }
-    Ok((limit, offset))
+    Ok((limit, offset, order))
 }
 
 async fn get_extraction(
     State(state): State<AppState>,
+    AuthenticatedUser { user_id, .. }: AuthenticatedUser,
     Path(id): Path<String>,
 ) -> Result<Json<ExtractionDetail>, ApiError> {
-    let stored = get_stored(&state.db, &id).await?;
+    let stored = get_stored(&state.db, user_id, &id).await?;
     if stored.summary.status == ExtractionStatus::Failed {
         return Ok(Json(ExtractionDetail {
             summary: stored.summary,
@@ -330,23 +491,23 @@ async fn get_extraction(
             raw: None,
         }));
     }
-    let detail = run_blocking(move || parse_detail(stored)).await?;
-    Ok(Json(detail))
+    Ok(Json(run_blocking(move || parse_detail(stored)).await?))
 }
 
 async fn download_extraction(
     State(state): State<AppState>,
+    AuthenticatedUser { user_id, .. }: AuthenticatedUser,
     Path(id): Path<String>,
     uri: Uri,
 ) -> Result<Response, ApiError> {
-    let stored = get_stored(&state.db, &id).await?;
+    let stored = get_stored(&state.db, user_id, &id).await?;
     if stored.summary.status == ExtractionStatus::Failed {
         return Err(ApiError::extraction_failed());
     }
     let view = parse_view(uri.query())?.to_owned();
-    let view_for_body = view.clone();
+    let body_view = view.clone();
     let file_name = stored.summary.file_name.clone();
-    let bytes = run_blocking(move || pretty_view(stored, &view_for_body)).await?;
+    let bytes = run_blocking(move || pretty_view(stored, &body_view)).await?;
     let disposition = format!(
         "attachment; filename=\"{}.{}.json\"",
         download_stem(&file_name),
@@ -370,13 +531,12 @@ async fn download_extraction(
 
 async fn delete_extraction(
     State(state): State<AppState>,
+    AuthenticatedUser { user_id, .. }: AuthenticatedUser,
     Path(id): Path<String>,
 ) -> Result<StatusCode, ApiError> {
-    let id = parse_id(&id)?;
-    let deleted = db::delete_one(&state.db, id).await.map_err(|error| {
-        tracing::error!(%error, "deleting extraction failed");
-        ApiError::database_error()
-    })?;
+    let deleted = db::delete_one(&state.db, user_id, parse_id(&id)?)
+        .await
+        .map_err(|_| ApiError::database_error())?;
     if deleted {
         Ok(StatusCode::NO_CONTENT)
     } else {
@@ -384,31 +544,17 @@ async fn delete_extraction(
     }
 }
 
-async fn delete_extractions(State(state): State<AppState>) -> Result<StatusCode, ApiError> {
-    db::delete_all(&state.db).await.map_err(|error| {
-        tracing::error!(%error, "clearing extractions failed");
-        ApiError::database_error()
-    })?;
+async fn delete_extractions(
+    State(state): State<AppState>,
+    AuthenticatedUser { user_id, .. }: AuthenticatedUser,
+) -> Result<StatusCode, ApiError> {
+    db::delete_all(&state.db, user_id)
+        .await
+        .map_err(|_| ApiError::database_error())?;
     Ok(StatusCode::NO_CONTENT)
 }
-
 async fn api_not_found() -> ApiError {
     ApiError::api_route_not_found()
-}
-
-async fn get_stored(pool: &SqlitePool, id: &str) -> Result<StoredExtraction, ApiError> {
-    let id = parse_id(id)?;
-    db::get_stored(pool, id)
-        .await
-        .map_err(|error| {
-            tracing::error!(%error, "getting extraction failed");
-            ApiError::database_error()
-        })?
-        .ok_or_else(ApiError::not_found)
-}
-
-fn parse_id(id: &str) -> Result<Uuid, ApiError> {
-    Uuid::parse_str(id).map_err(|_| ApiError::invalid_id())
 }
 
 fn parse_view(query: Option<&str>) -> Result<&str, ApiError> {
@@ -419,6 +565,21 @@ fn parse_view(query: Option<&str>) -> Result<&str, ApiError> {
         "normalized" | "raw" => Ok(value),
         _ => Err(ApiError::invalid_view()),
     }
+}
+
+fn parse_id(id: &str) -> Result<Uuid, ApiError> {
+    Uuid::parse_str(id).map_err(|_| ApiError::invalid_id())
+}
+
+async fn get_stored(
+    pool: &SqlitePool,
+    user_id: Uuid,
+    id: &str,
+) -> Result<StoredExtraction, ApiError> {
+    db::get_stored(pool, user_id, parse_id(id)?)
+        .await
+        .map_err(|_| ApiError::database_error())?
+        .ok_or_else(ApiError::not_found)
 }
 
 fn parse_detail(stored: StoredExtraction) -> Result<ExtractionDetail, ApiError> {
@@ -466,12 +627,14 @@ fn log_processing(error: serde_json::Error) -> ApiError {
 }
 
 fn download_stem(file_name: &str) -> String {
-    let stem = file_name
-        .get(..file_name.len().saturating_sub(4))
-        .filter(|_| {
-            file_name.len() >= 4 && file_name[file_name.len() - 4..].eq_ignore_ascii_case(".fit")
-        })
-        .unwrap_or(file_name);
+    let stem = if file_name.len() >= 4
+        && (file_name[file_name.len() - 4..].eq_ignore_ascii_case(".fit")
+            || file_name[file_name.len() - 4..].eq_ignore_ascii_case(".zip"))
+    {
+        &file_name[..file_name.len() - 4]
+    } else {
+        file_name
+    };
     let stem = stem
         .chars()
         .map(|character| match character {

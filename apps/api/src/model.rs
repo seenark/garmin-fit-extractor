@@ -3,6 +3,18 @@ use uuid::Uuid;
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct UserProfile {
+    pub id: Uuid,
+    pub email: String,
+    pub display_name: Option<String>,
+}
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct CurrentUserResponse {
+    pub user: Option<UserProfile>,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Metric {
     pub value: Option<f64>,
     pub unit: String,
@@ -16,7 +28,7 @@ pub struct Source {
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct Activity {
+pub struct NormalizedActivity {
     pub r#type: Option<String>,
     pub sub_type: Option<String>,
     pub date: Option<String>,
@@ -128,7 +140,7 @@ pub struct Lap {
 pub struct Analysis {
     pub schema_version: String,
     pub source: Source,
-    pub activity: Activity,
+    pub activity: NormalizedActivity,
     pub summary: Summary,
     pub heart_rate: HeartRate,
     pub pace: Pace,
@@ -148,7 +160,7 @@ impl Analysis {
             source: Source {
                 file_name: file_name.into(),
             },
-            activity: Activity {
+            activity: NormalizedActivity {
                 r#type: None,
                 sub_type: None,
                 date: None,
@@ -239,7 +251,7 @@ impl<'de> Deserialize<'de> for Analysis {
         struct Wire {
             schema_version: String,
             source: Source,
-            activity: Activity,
+            activity: NormalizedActivity,
             summary: Summary,
             heart_rate: HeartRate,
             pace: Pace,
@@ -267,6 +279,83 @@ impl<'de> Deserialize<'de> for Analysis {
         analysis.validate().map_err(serde::de::Error::custom)?;
         Ok(analysis)
     }
+}
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub struct ActivitySummary {
+    pub activity_id: Uuid,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sport: Option<String>,
+    pub started_at: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub distance_m: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub duration_s: Option<i64>,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub struct Activity {
+    #[serde(flatten)]
+    pub summary: ActivitySummary,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub average_heart_rate: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub maximum_heart_rate: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub average_pace_s_per_km: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub elevation_gain_m: Option<f64>,
+    pub laps: Vec<CoachLap>,
+    pub heart_rate_zones: Vec<CoachHeartRateZone>,
+    pub derived_metrics: CoachDerivedMetrics,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub struct CoachLap {
+    pub index: u32,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub start_time: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub distance_m: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub duration_s: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub moving_time_s: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pace_s_per_km: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub average_heart_rate: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub maximum_heart_rate: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub average_power_w: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub maximum_power_w: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub average_cadence_spm: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub maximum_cadence_spm: Option<f64>,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub struct CoachHeartRateZone {
+    pub zone: u32,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub min_bpm: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_bpm: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub duration_s: Option<f64>,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub struct CoachDerivedMetrics {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub heart_rate_drift_percent: Option<f64>,
 }
 
 fn metric(value: Option<f64>, unit: &str) -> Metric {
