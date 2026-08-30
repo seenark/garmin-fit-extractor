@@ -1,0 +1,105 @@
+/* Hallmark · Cobalt workbench token contract · light technical palette */
+:root {
+  /* Cool, tinted surfaces and ink */
+  --color-paper: oklch(97.8% 0.012 250);
+  --color-paper-2: oklch(95.1% 0.019 250);
+  --color-paper-3: oklch(91.4% 0.026 250);
+  --color-surface: oklch(99.1% 0.008 250);
+  --color-surface-raised: oklch(99.5% 0.006 250);
+  --color-ink: oklch(20.5% 0.027 255);
+  --color-ink-2: oklch(35.5% 0.032 252);
+  --color-muted: oklch(48.5% 0.026 250);
+  --color-muted-2: oklch(59.5% 0.021 250);
+  --color-rule: oklch(86% 0.022 250);
+  --color-rule-strong: oklch(74% 0.035 250);
+
+  /* One cobalt signal, plus explicit status colors */
+  --color-accent: oklch(52.5% 0.19 258);
+  --color-accent-strong: oklch(43% 0.18 258);
+  --color-accent-soft: oklch(92% 0.045 258);
+  --color-accent-ink: oklch(98.5% 0.008 255);
+  --color-focus: oklch(34% 0.145 246);
+  --color-success: oklch(43% 0.13 154);
+  --color-success-soft: oklch(92% 0.038 154);
+  --color-danger: oklch(45% 0.17 28);
+  --color-danger-soft: oklch(92% 0.045 28);
+  --color-danger-ink: oklch(34% 0.12 28);
+  --color-code: oklch(23% 0.035 255);
+  --color-code-ink: oklch(92% 0.02 250);
+  --color-overlay: oklch(20% 0.03 255 / 0.38);
+
+  /* Type pairing: display, body, and one technical register */
+  --font-display: "Bricolage Grotesque", "Avenir Next", ui-sans-serif, sans-serif;
+  --font-body: "IBM Plex Sans", "Avenir Next", ui-sans-serif, sans-serif;
+  --font-mono: "JetBrains Mono", "SFMono-Regular", ui-monospace, monospace;
+  --font-weight-regular: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+
+  /* 4-point spacing scale */
+  --space-3xs: 0.125rem;
+  --space-2xs: 0.25rem;
+  --space-xs: 0.5rem;
+  --space-sm: 0.75rem;
+  --space-md: 1rem;
+  --space-lg: 1.5rem;
+  --space-xl: 2.5rem;
+  --space-2xl: 4rem;
+  --space-3xl: 6rem;
+  --space-4xl: 9rem;
+
+  /* Major-third type scale and readable line measures */
+  --text-2xs: 0.6875rem;
+  --text-xs: 0.75rem;
+  --text-sm: 0.875rem;
+  --text-base: 1rem;
+  --text-md: 1.125rem;
+  --text-lg: 1.375rem;
+  --text-xl: 1.75rem;
+  --text-2xl: 2.25rem;
+  --text-3xl: 3rem;
+  --text-4xl: 3.75rem;
+  --text-display: clamp(2.75rem, 5vw + 1rem, 5.25rem);
+  --text-display-s: clamp(2.5rem, 4vw + 0.75rem, 4.25rem);
+  --leading-tight: 1.08;
+  --leading-heading: 1.16;
+  --leading-body: 1.58;
+  --leading-loose: 1.68;
+  --tracking-tight: -0.035em;
+  --tracking-heading: -0.025em;
+  --tracking-label: 0.09em;
+  --tracking-mono: 0.035em;
+  --measure-copy: 60ch;
+  --measure-heading: 18ch;
+  --content-max: 72rem;
+
+  /* Explicit borders, motion, and radii */
+  --rule-thin: 1px;
+  --rule-emphasis: 2px;
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in: cubic-bezier(0.7, 0, 0.84, 0);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --dur-instant: 0ms;
+  --dur-micro: 120ms;
+  --dur-short: 220ms;
+  --dur-medium: 300ms;
+  --dur-long: 420ms;
+  --radius-control: 0.5rem;
+  --radius-card: 0.875rem;
+  --radius-dialog: 1rem;
+  --radius-badge: 0.375rem;
+  --radius-pill: 999px;
+
+  /* Named elevation and stacking levels */
+  --shadow-card: 0 1px 2px oklch(20% 0.04 255 / 0.07);
+  --shadow-nav: 0 0.5rem 1.5rem oklch(20% 0.04 255 / 0.12);
+  --shadow-dialog: 0 1.5rem 3rem oklch(20% 0.04 255 / 0.18);
+  --z-base: 1;
+  --z-raised: 10;
+  --z-dropdown: 100;
+  --z-sticky: 200;
+  --z-modal: 400;
+  --z-toast: 500;
+  --z-tooltip: 600;
+}

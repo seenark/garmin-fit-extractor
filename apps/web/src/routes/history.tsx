@@ -84,11 +84,25 @@ function HistoryPage() {
   }
 
   return (
-    <>
-      <div className="actions">
-        <label>
-          Order{" "}
+    <div className="page-stack">
+      <header className="page-intro">
+        <div>
+          <h1>History</h1>
+          <p className="page-lede">
+            Review extracted activity data, open a record, or remove stored
+            results from this account.
+          </p>
+        </div>
+        <span className="history-total" aria-label={`${page.total} total extractions`}>
+          {page.total} {page.total === 1 ? "extraction" : "extractions"}
+        </span>
+      </header>
+
+      <div className="history-toolbar">
+        <label className="field-label" htmlFor="history-order">
+          <span>Order</span>
           <select
+            id="history-order"
             value={search.order}
             onChange={(event) =>
               navigate({
@@ -113,9 +127,10 @@ function HistoryPage() {
           Clear history
         </button>
       </div>
+
       {error ? (
         <div className="error" role="alert">
-          {error}
+          <span>{error}</span>
         </div>
       ) : null}
       <HistoryTable
@@ -146,6 +161,6 @@ function HistoryPage() {
           onCancel={() => setTarget(null)}
         />
       ) : null}
-    </>
+    </div>
   );
 }

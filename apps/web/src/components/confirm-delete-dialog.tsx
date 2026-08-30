@@ -7,15 +7,45 @@ interface ConfirmDeleteDialogProps {
   onCancel: () => void;
 }
 
-export function ConfirmDeleteDialog({ title, description, confirmLabel, busy, onConfirm, onCancel }: ConfirmDeleteDialogProps) {
+export function ConfirmDeleteDialog({
+  title,
+  description,
+  confirmLabel,
+  busy,
+  onConfirm,
+  onCancel,
+}: ConfirmDeleteDialogProps) {
   return (
-    <div className="card" data-testid="confirm-delete" role="dialog" aria-modal="true" aria-labelledby="confirm-delete-title">
-      <h2 id="confirm-delete-title">{title}</h2>
-      <p>{description}</p>
-      <div className="actions">
-        <button type="button" className="danger" disabled={busy} onClick={onConfirm}>{busy ? "Deleting…" : confirmLabel}</button>
-        <button type="button" className="secondary" disabled={busy} onClick={onCancel}>Cancel</button>
-      </div>
+    <div className="dialog-backdrop" data-testid="confirm-delete">
+      <section
+        className="card dialog-card"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="confirm-delete-title"
+        aria-describedby="confirm-delete-description"
+      >
+        <h2 id="confirm-delete-title">{title}</h2>
+        <p id="confirm-delete-description">{description}</p>
+        <div className="dialog-actions">
+          <button
+            className="danger"
+            type="button"
+            disabled={busy}
+            aria-busy={busy}
+            onClick={onConfirm}
+          >
+            {busy ? "Deleting…" : confirmLabel}
+          </button>
+          <button
+            className="secondary"
+            type="button"
+            disabled={busy}
+            onClick={onCancel}
+          >
+            Cancel
+          </button>
+        </div>
+      </section>
     </div>
   );
 }

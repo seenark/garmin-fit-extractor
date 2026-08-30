@@ -1,0 +1,13 @@
+[
+  {
+    "date": "2026-08-30",
+    "scope": "app",
+    "macrostructure": "Workbench",
+    "theme": "Cobalt",
+    "enrichment": "none",
+    "brief": "Garmin FIT Extractor upload and history surfaces",
+    "genre": "modern-minimal",
+    "nav": "N5 floating pill",
+    "footer": "none"
+  }
+]

@@ -24,18 +24,40 @@ export function HistoryTable({
 }: HistoryTableProps) {
   if (page.items.length === 0 && page.offset === 0) {
     return (
-      <section className="card">
-        <h1>History</h1>
-        <p>
-          No uploads yet. <Link to="/">Upload a ZIP archive</Link> to begin.
-        </p>
+      <section className="card empty-state" aria-labelledby="empty-history-title">
+        <span className="empty-state-mark" aria-hidden="true">
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth="1.6"
+          >
+            <path d="M4 5h16v14H4z" />
+            <path d="M8 9h8M8 13h5" />
+          </svg>
+        </span>
+        <h2 id="empty-history-title">No uploads yet.</h2>
+        <p>Upload a ZIP archive to see extracted activity data here.</p>
+        <Link className="button secondary" to="/">
+          Upload a ZIP archive
+        </Link>
       </section>
     );
   }
 
   return (
-    <section className="card" aria-labelledby="history-title">
-      <h1 id="history-title">History</h1>
+    <section className="card history-card" aria-labelledby="history-table-title">
+      <div className="section-heading">
+        <div>
+          <h2 id="history-table-title">Recent extractions</h2>
+          <p className="section-note">
+            Activity records are ordered by the date recorded in each archive.
+          </p>
+        </div>
+        <span className="history-total">{page.total} total</span>
+      </div>
       <div className="table-wrap">
         <table data-testid="history-table">
           <thead>
@@ -54,43 +76,48 @@ export function HistoryTable({
               const succeeded = item.status === "succeeded";
               return (
                 <tr key={item.id}>
-                  <td>{item.fileName}</td>
-                  <td>{formatSize(item.fileSizeBytes)}</td>
-                  <td>
+                  <td className="file-cell" data-label="File">
+                    {item.fileName}
+                  </td>
+                  <td data-label="Size">{formatSize(item.fileSizeBytes)}</td>
+                  <td data-label="Date">
                     {item.activityDate
                       ? new Date(item.activityDate).toLocaleDateString()
                       : "Unknown"}
                   </td>
-                  <td>{item.activityType ?? "Unknown"}</td>
-                  <td>{new Date(item.createdAt).toLocaleString()}</td>
-                  <td>
-                    <span className={succeeded ? "success" : "failed"}>
+                  <td data-label="Exercise">{item.activityType ?? "Unknown"}</td>
+                  <td data-label="Uploaded">
+                    {new Date(item.createdAt).toLocaleString()}
+                  </td>
+                  <td data-label="Status">
+                    <span className={`status-badge ${succeeded ? "success" : "failed"}`}>
+                      <span className="status-dot" aria-hidden="true" />
                       {succeeded ? "Succeeded" : "Failed"}
                     </span>
                     {item.error ? (
-                      <>
-                        <br />
-                        {item.error.message}
-                      </>
+                      <span className="table-error">{item.error.message}</span>
                     ) : null}
                   </td>
-                  <td className="actions">
-                    <Link
-                      to="/extractions/$id"
-                      params={{ id: item.id }}
-                      search={{ offset: page.offset, order }}
-                    >
-                      Open
-                    </Link>
-                    <button
-                      className="danger"
-                      type="button"
-                      disabled={deletingId !== null}
-                      aria-label={`Delete ${item.fileName}`}
-                      onClick={() => onDelete(item)}
-                    >
-                      Delete
-                    </button>
+                  <td data-label="Actions">
+                    <div className="table-actions">
+                      <Link
+                        className="button secondary"
+                        to="/extractions/$id"
+                        params={{ id: item.id }}
+                        search={{ offset: page.offset, order }}
+                      >
+                        Open
+                      </Link>
+                      <button
+                        className="danger"
+                        type="button"
+                        disabled={deletingId !== null}
+                        aria-label={`Delete ${item.fileName}`}
+                        onClick={() => onDelete(item)}
+                      >
+                        Delete
+                      </button>
+                    </div>
                   </td>
                 </tr>
               );
@@ -98,20 +125,17 @@ export function HistoryTable({
           </tbody>
         </table>
       </div>
-      <div className="actions">
+      <div className="pagination">
         <button
           className="secondary"
           type="button"
           disabled={page.offset === 0 || deletingId !== null}
-          onClick={() =>
-            onPageChange(Math.max(0, page.offset - page.limit))
-          }
+          onClick={() => onPageChange(Math.max(0, page.offset - page.limit))}
         >
           Previous
         </button>
         <span>
-          {page.offset + 1}–{Math.min(page.offset + page.items.length, page.total)}{" "}
-          of {page.total}
+          {page.offset + 1}–{Math.min(page.offset + page.items.length, page.total)} of {page.total}
         </span>
         <button
           className="secondary"

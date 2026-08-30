@@ -9,6 +9,7 @@ RUN bun install --frozen-lockfile
 
 FROM bun-deps AS web-build
 
+COPY tokens.css ./tokens.css
 COPY apps/web ./apps/web
 
 WORKDIR /app/apps/web

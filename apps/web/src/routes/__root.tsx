@@ -24,28 +24,32 @@ export const Route = createRootRoute({
     error instanceof ApiError && error.code === "AUTH_REQUIRED" ? (
       <SignInScreen />
     ) : (
-      <main className="shell">
+      <main className="shell page">
         <section className="card error">
-          <h1>Something went wrong</h1>
-          <p>
-            {error instanceof Error
-              ? error.message
-              : "The requested page could not be loaded."}
-          </p>
-          <Link to="/">Return to upload</Link>
+          <div>
+            <h1>Something went wrong</h1>
+            <p>
+              {error instanceof Error
+                ? error.message
+                : "The requested page could not be loaded."}
+            </p>
+            <Link to="/">Return to upload</Link>
+          </div>
         </section>
       </main>
     ),
 });
+
 function SignInScreen({ authError = false }: { authError?: boolean }) {
   return (
-    <main className="shell">
-      <section className="card">
+    <main className="shell auth-shell">
+      <section className="card auth-card">
+        <span className="brand-mark" aria-hidden="true">FIT</span>
         <h1>Garmin FIT Extractor</h1>
         <p>Sign in with Google to continue.</p>
         {authError ? (
           <p className="error" role="alert">
-            Google sign-in failed. Try again.
+            <span>Google sign-in failed. Try again.</span>
           </p>
         ) : null}
         <button type="button" onClick={startGoogleLogin}>
@@ -55,13 +59,60 @@ function SignInScreen({ authError = false }: { authError?: boolean }) {
     </main>
   );
 }
+
 function RootLayout() {
   const user = Route.useLoaderData().user;
   const search = Route.useSearch();
   const router = useRouter();
   const [busy, setBusy] = useState(false);
+
   if (!user) {
     return <SignInScreen authError={search.authError === "AUTH_FAILED"} />;
   }
-  return <div className="shell"><header className="site-header"><Link className="brand" to="/">Garmin FIT Extractor</Link><nav aria-label="Main navigation"><Link to="/" activeProps={{"aria-current":"page"}}>Upload</Link><Link to="/history" search={{offset:0,order:"desc"}} activeProps={{"aria-current":"page"}}>History</Link></nav><span>{user.displayName ?? user.email}</span><button type="button" disabled={busy} onClick={async()=>{setBusy(true);try{await logout();await router.invalidate();}finally{setBusy(false);}}}>Sign out</button></header><main className="page"><Outlet /></main></div>;
+
+  return (
+    <div className="shell">
+      <header className="site-header">
+        <Link className="brand" to="/">
+          <span className="brand-mark" aria-hidden="true">FIT</span>
+          <span className="brand-text">Garmin FIT Extractor</span>
+        </Link>
+        <nav aria-label="Main navigation">
+          <Link to="/" activeProps={{ "aria-current": "page" }}>
+            Upload
+          </Link>
+          <Link
+            to="/history"
+            search={{ offset: 0, order: "desc" }}
+            activeProps={{ "aria-current": "page" }}
+          >
+            History
+          </Link>
+        </nav>
+        <div className="account-area">
+          <span className="account-name">{user.displayName ?? user.email}</span>
+          <button
+            className="quiet"
+            type="button"
+            disabled={busy}
+            aria-busy={busy}
+            onClick={async () => {
+              setBusy(true);
+              try {
+                await logout();
+                await router.invalidate();
+              } finally {
+                setBusy(false);
+              }
+            }}
+          >
+            Sign out
+          </button>
+        </div>
+      </header>
+      <main className="page">
+        <Outlet />
+      </main>
+    </div>
+  );
 }

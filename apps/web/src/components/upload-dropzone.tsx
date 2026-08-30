@@ -1,5 +1,139 @@
-import { useRef, useState } from "react";
+import { useState } from "react";
+
 import { validateFiles } from "../lib/upload-validation";
-interface UploadDropzoneProps { files: File[]; disabled: boolean; onFilesChange: (files: File[]) => void; onSubmit: () => void; }
-function formatBytes(bytes: number): string { return `${(bytes / (1024 * 1024)).toFixed(bytes >= 1024 * 1024 ? 1 : 2)} MiB`; }
-export function UploadDropzone({ files, disabled, onFilesChange, onSubmit }: UploadDropzoneProps) { const input = useRef<HTMLInputElement>(null); const [dragging, setDragging] = useState(false); const errors = validateFiles(files); const accept = (incoming: FileList | File[]) => onFilesChange(Array.from(incoming)); return <section className="card" aria-labelledby="upload-title"><h1 id="upload-title">Upload Garmin ZIP archives</h1><p className="muted">Upload 1–10 ZIP archives, up to 20 MiB each. Extracted FIT members are processed but never retained.</p><div className={`dropzone${dragging ? " dragging" : ""}`} data-testid="upload-dropzone" onDragEnter={e => { e.preventDefault(); setDragging(true); }} onDragOver={e => e.preventDefault()} onDragLeave={() => setDragging(false)} onDrop={e => { e.preventDefault(); setDragging(false); accept(e.dataTransfer.files); }}><input ref={input} aria-label="Choose ZIP files" type="file" accept=".zip,.ZIP" multiple hidden onChange={e => e.target.files && accept(e.target.files)} /><p>Drop ZIP archives here, or choose them from your computer.</p><button type="button" className="secondary" onClick={() => input.current?.click()} disabled={disabled}>Choose files</button></div>{files.length > 0 ? <ul className="file-list" aria-label="Selected files">{files.map((file,index) => <li key={`${file.name}-${file.size}-${index}`} data-testid="selected-file"><span>{file.name} <span className="muted">({formatBytes(file.size)})</span></span><button type="button" aria-label={`Remove ${file.name}`} disabled={disabled} onClick={() => onFilesChange(files.filter((_,current) => current !== index))}>Remove</button></li>)}</ul> : null}{errors.length > 0 ? <div className="error" role="alert">{errors.map(error => <div key={error}>{error}</div>)}</div> : null}<div className="actions"><button type="button" data-testid="upload-submit" disabled={disabled || errors.length > 0} onClick={onSubmit}>{disabled ? "Uploading and extracting…" : "Upload ZIP archives"}</button>{disabled ? <span className="muted">Uploading and extracting…</span> : null}</div></section>; }
+
+interface UploadDropzoneProps {
+  files: File[];
+  disabled: boolean;
+  onFilesChange: (files: File[]) => void;
+  onSubmit: () => void;
+}
+
+function formatBytes(bytes: number): string {
+  return `${(bytes / (1024 * 1024)).toFixed(bytes >= 1024 * 1024 ? 1 : 2)} MiB`;
+}
+
+export function UploadDropzone({
+  files,
+  disabled,
+  onFilesChange,
+  onSubmit,
+}: UploadDropzoneProps) {
+  const [dragging, setDragging] = useState(false);
+  const errors = files.length > 0 ? validateFiles(files) : [];
+
+  function accept(incoming: FileList | File[]) {
+    onFilesChange(Array.from(incoming));
+  }
+
+  return (
+    <section className="card upload-card" aria-labelledby="upload-card-title">
+      <div className="section-heading">
+        <div>
+          <h2 id="upload-card-title">Choose ZIP archives</h2>
+          <p className="section-note">
+            Drop a batch into the intake surface, or use the file picker when
+            drag and drop is not available.
+          </p>
+        </div>
+        <span className="selection-count" aria-live="polite">
+          {files.length === 0 ? "No files selected" : `${files.length} selected`}
+        </span>
+      </div>
+
+      <label
+        className={`dropzone${dragging ? " dragging" : ""}`}
+        data-testid="upload-dropzone"
+        aria-disabled={disabled}
+        onDragEnter={(event) => {
+          event.preventDefault();
+          if (!disabled) setDragging(true);
+        }}
+        onDragOver={(event) => event.preventDefault()}
+        onDragLeave={() => setDragging(false)}
+        onDrop={(event) => {
+          event.preventDefault();
+          setDragging(false);
+          if (!disabled) accept(event.dataTransfer.files);
+        }}
+      >
+        <input
+          className="file-input"
+          aria-label="Choose ZIP files"
+          type="file"
+          accept=".zip,.ZIP"
+          multiple
+          disabled={disabled}
+          onChange={(event) => {
+            if (event.target.files) accept(event.target.files);
+          }}
+        />
+        <svg
+          className="dropzone-icon"
+          viewBox="0 0 32 32"
+          fill="none"
+          stroke="currentColor"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeWidth="1.6"
+          aria-hidden="true"
+        >
+          <path d="M16 21V5m0 0-5 5m5-5 5 5" />
+          <path d="M7 17v8h18v-8" />
+        </svg>
+        <span className="dropzone-title">Drop ZIP archives here</span>
+        <span className="dropzone-copy">or choose them from your computer</span>
+        <span className="button secondary" aria-hidden="true">
+          Choose files
+        </span>
+      </label>
+
+      {files.length > 0 ? (
+        <ul className="file-list" aria-label="Selected files">
+          {files.map((file, index) => (
+            <li key={`${file.name}-${file.size}-${index}`} data-testid="selected-file">
+              <span className="file-name">
+                {file.name} <span className="file-size">{formatBytes(file.size)}</span>
+              </span>
+              <button
+                className="remove-file"
+                type="button"
+                aria-label={`Remove ${file.name}`}
+                disabled={disabled}
+                onClick={() =>
+                  onFilesChange(files.filter((_, current) => current !== index))
+                }
+              >
+                Remove
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+
+      {errors.length > 0 ? (
+        <div className="inline-error" role="alert">
+          <div>
+            <strong>Upload needs attention.</strong>
+            {errors.map((error) => (
+              <div key={error}>{error}</div>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
+      <div className="upload-actions">
+        <span className="section-note">ZIP only · 20 MiB maximum per file</span>
+        <button
+          type="button"
+          data-testid="upload-submit"
+          disabled={disabled || files.length === 0 || errors.length > 0}
+          aria-busy={disabled}
+          onClick={onSubmit}
+        >
+          {disabled ? "Uploading and extracting…" : "Upload ZIP archives"}
+        </button>
+      </div>
+    </section>
+  );
+}

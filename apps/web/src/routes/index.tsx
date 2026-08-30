@@ -1,4 +1,4 @@
-import { createFileRoute, useRouter } from "@tanstack/react-router";
+import { Link, createFileRoute, useRouter } from "@tanstack/react-router";
 import { useState } from "react";
 
 import { BatchResults } from "../components/batch-results";
@@ -22,15 +22,74 @@ function UploadPage() {
       setResult(await createExtractions(files));
       await router.invalidate();
     } catch (cause) {
-      setError(cause instanceof ApiError ? cause.message : "The upload could not be completed.");
+      setError(
+        cause instanceof ApiError
+          ? cause.message
+          : "The upload could not be completed.",
+      );
     } finally {
       setUploading(false);
     }
   }
 
-  return <>
-    <UploadDropzone files={files} disabled={uploading} onFilesChange={(nextFiles) => { setFiles(nextFiles); setResult(null); setError(null); }} onSubmit={submit} />
-    {error ? <div className="error" role="alert">{error}</div> : null}
-    {result ? <BatchResults result={result} /> : null}
-  </>;
+  function handleFilesChange(nextFiles: File[]) {
+    setFiles(nextFiles);
+    setResult(null);
+    setError(null);
+  }
+
+  return (
+    <div className="page-stack">
+      <header className="page-intro">
+        <div>
+          <h1>Upload Garmin ZIP archives</h1>
+          <p className="page-lede">
+            Upload 1–10 ZIP archives, up to 20 MiB each. Extracted FIT members
+            are processed but never retained.
+          </p>
+        </div>
+        <Link
+          className="button secondary page-intro-action"
+          to="/history"
+          search={{ offset: 0, order: "desc" }}
+        >
+          Open history
+        </Link>
+      </header>
+
+      <div className="workbench-grid">
+        <UploadDropzone
+          files={files}
+          disabled={uploading}
+          onFilesChange={handleFilesChange}
+          onSubmit={submit}
+        />
+        <aside className="constraints-panel" aria-labelledby="constraints-title">
+          <h2 id="constraints-title">Upload constraints</h2>
+          <p>Keep the source archive close; the extracted activity data is not retained.</p>
+          <ul className="constraint-list">
+            <li>
+              <span className="constraint-label">Input</span>
+              <span className="constraint-value">ZIP archives</span>
+            </li>
+            <li>
+              <span className="constraint-label">Batch</span>
+              <span className="constraint-value">1–10 files</span>
+            </li>
+            <li>
+              <span className="constraint-label">Limit</span>
+              <span className="constraint-value">20 MiB per file</span>
+            </li>
+          </ul>
+        </aside>
+      </div>
+
+      {error ? (
+        <div className="error" role="alert">
+          <span>{error}</span>
+        </div>
+      ) : null}
+      {result ? <BatchResults result={result} /> : null}
+    </div>
+  );
 }
