@@ -139,7 +139,7 @@ async fn create_extractions(
                     archive_name,
                     upload.file_size_bytes,
                     "FILE_TOO_LARGE",
-                    "Uploaded ZIP or extracted FIT member exceeds the 20 MiB limit.",
+                    "Uploaded ZIP or extracted FIT file is larger than the 20-megabyte limit.",
                 )
                 .await?,
             );
@@ -300,7 +300,7 @@ fn preflight_archive(bytes: Vec<u8>, archive_name: String) -> Result<Vec<MemberR
                 name: display,
                 size,
                 code: "FILE_TOO_LARGE",
-                message: "Uploaded ZIP or extracted FIT member exceeds the 20 MiB limit.",
+                message: "Uploaded ZIP or extracted FIT file is larger than the 20-megabyte limit.",
             });
             continue;
         }
@@ -328,7 +328,7 @@ fn preflight_archive(bytes: Vec<u8>, archive_name: String) -> Result<Vec<MemberR
                 name: display,
                 size: data.len() as u64,
                 code: "FILE_TOO_LARGE",
-                message: "Uploaded ZIP or extracted FIT member exceeds the 20 MiB limit.",
+                message: "Uploaded ZIP or extracted FIT file is larger than the 20-megabyte limit.",
             });
             continue;
         }

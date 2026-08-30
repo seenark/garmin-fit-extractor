@@ -1,32 +1,36 @@
-/* Hallmark · Cobalt workbench token contract · light technical palette */
+/* Catppuccin Latte · semantic palette for the FIT workbench */
 :root {
-  /* Cool, tinted surfaces and ink */
-  --color-paper: oklch(97.8% 0.012 250);
-  --color-paper-2: oklch(95.1% 0.019 250);
-  --color-paper-3: oklch(91.4% 0.026 250);
-  --color-surface: oklch(99.1% 0.008 250);
-  --color-surface-raised: oklch(99.5% 0.006 250);
-  --color-ink: oklch(20.5% 0.027 255);
-  --color-ink-2: oklch(35.5% 0.032 252);
-  --color-muted: oklch(48.5% 0.026 250);
-  --color-muted-2: oklch(59.5% 0.021 250);
-  --color-rule: oklch(86% 0.022 250);
-  --color-rule-strong: oklch(74% 0.035 250);
+  /* Catppuccin Latte: base, mantle, crust, and text hierarchy */
+  --color-paper: oklch(95.78% 0.0058 264.5);
+  --color-paper-2: oklch(93.35% 0.0087 264.5);
+  --color-paper-3: oklch(90.60% 0.0117 264.5);
+  --color-surface: oklch(96.70% 0.0050 264.5);
+  --color-surface-raised: oklch(97.80% 0.0040 264.5);
+  --color-ink: oklch(43.55% 0.0430 279.3);
+  --color-ink-2: oklch(49.20% 0.0385 279.3);
+  --color-muted: oklch(49.20% 0.0385 279.3);
+  --color-muted-2: oklch(54.71% 0.0343 279.1);
+  --color-rule: oklch(80.83% 0.0174 271.2);
+  --color-rule-strong: oklch(54.71% 0.0343 279.1);
 
-  /* One cobalt signal, plus explicit status colors */
-  --color-accent: oklch(52.5% 0.19 258);
-  --color-accent-strong: oklch(43% 0.18 258);
-  --color-accent-soft: oklch(92% 0.045 258);
-  --color-accent-ink: oklch(98.5% 0.008 255);
-  --color-focus: oklch(34% 0.145 246);
-  --color-success: oklch(43% 0.13 154);
-  --color-success-soft: oklch(92% 0.038 154);
-  --color-danger: oklch(45% 0.17 28);
-  --color-danger-soft: oklch(92% 0.045 28);
-  --color-danger-ink: oklch(34% 0.12 28);
-  --color-code: oklch(23% 0.035 255);
-  --color-code-ink: oklch(92% 0.02 250);
-  --color-overlay: oklch(20% 0.03 255 / 0.38);
+  /* Catppuccin Latte accents: mauve for action, blue for focus */
+  --color-accent: oklch(55.47% 0.2503 297.0);
+  --color-accent-strong: oklch(48.00% 0.2100 297.0);
+  --color-accent-soft: oklch(94.00% 0.0400 297.0);
+  --color-accent-ink: oklch(95.78% 0.0058 264.5);
+  --color-focus: oklch(55.86% 0.2255 262.1);
+
+  /* Semantic status colors, tuned for readable text on soft surfaces */
+  --color-success: oklch(45.00% 0.1400 140.4);
+  --color-success-soft: oklch(95.00% 0.0350 140.4);
+  --color-danger: oklch(55.05% 0.2155 19.8);
+  --color-danger-soft: oklch(95.00% 0.0350 19.8);
+  --color-danger-ink: oklch(43.00% 0.1800 19.8);
+
+  /* Catppuccin dark base/text keep decoded JSON legible as a code surface */
+  --color-code: oklch(24.29% 0.0304 283.9);
+  --color-code-ink: oklch(87.87% 0.0426 272.3);
+  --color-overlay: oklch(43.55% 0.0430 279.3 / 0.42);
 
   /* Type pairing: display, body, and one technical register */
   --font-display: "Bricolage Grotesque", "Avenir Next", ui-sans-serif, sans-serif;
@@ -92,9 +96,9 @@
   --radius-pill: 999px;
 
   /* Named elevation and stacking levels */
-  --shadow-card: 0 1px 2px oklch(20% 0.04 255 / 0.07);
-  --shadow-nav: 0 0.5rem 1.5rem oklch(20% 0.04 255 / 0.12);
-  --shadow-dialog: 0 1.5rem 3rem oklch(20% 0.04 255 / 0.18);
+  --shadow-card: 0 1px 2px oklch(43.55% 0.0430 279.3 / 0.10);
+  --shadow-nav: 0 0.5rem 1.5rem oklch(43.55% 0.0430 279.3 / 0.14);
+  --shadow-dialog: 0 1.5rem 3rem oklch(43.55% 0.0430 279.3 / 0.20);
   --z-base: 1;
   --z-raised: 10;
   --z-dropdown: 100;

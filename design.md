@@ -7,9 +7,9 @@ interaction rules rather than rotating through separate page themes.
 ## Genre
 
 **Modern-minimal technical.** The interface is an instrument panel for a
-specific file workflow: direct, quiet, and precise. The visual language is
-Cobalt-like — a cool tinted near-white field, dark navy ink, and one cobalt
-signal color used sparingly for action and focus.
+specific file workflow: direct, quiet, and precise. The visual language uses Catppuccin Latte — a soft lavender-tinted near-white
+field, blue-gray ink, and a mauve signal color used sparingly for action, with
+blue reserved for focus.
 
 ## Macrostructure family
 
@@ -27,16 +27,16 @@ the page.
 
 All production colors live in the root `tokens.css` file and use OKLCH.
 
-- `--color-paper` — cool near-white page field
-- `--color-paper-2` / `--color-paper-3` — tinted working surfaces
+- `--color-paper` — Catppuccin Latte base page field
+- `--color-paper-2` / `--color-paper-3` — Catppuccin mantle and crust working surfaces
 - `--color-surface` / `--color-surface-raised` — quiet raised panels
 - `--color-ink` / `--color-ink-2` — primary and secondary text
 - `--color-muted` / `--color-muted-2` — explanatory and metadata text
 - `--color-rule` / `--color-rule-strong` — visible technical boundaries
-- `--color-accent` / `--color-accent-strong` — cobalt action signal
-- `--color-accent-soft` — restrained cobalt tint
+- `--color-accent` / `--color-accent-strong` — Catppuccin mauve action signal
+- `--color-accent-soft` — restrained mauve tint
 - `--color-accent-ink` — text on an accent-filled control
-- `--color-focus` — high-contrast keyboard focus ring
+- `--color-focus` — Catppuccin blue keyboard focus ring
 - `--color-success` / `--color-success-soft` — extraction success
 - `--color-danger` / `--color-danger-soft` / `--color-danger-ink` — errors and permanent actions
 - `--color-code` / `--color-code-ink` — raw JSON surface
@@ -99,7 +99,7 @@ Motion is functional and quiet.
 
 ## CTA voice
 
-Primary actions use short, concrete verbs: `Upload ZIP archives`, `Open`,
+Primary actions use short, concrete verbs: `Upload ZIP files`, `Open`,
 `Delete`, and `Clear history`. Secondary actions use equally direct labels:
 `Choose files`, `Previous`, `Next`, and `Cancel`. Navigation stays short:
 `Upload`, `History`, and `Sign out`. Avoid hype, invented metrics, and generic
@@ -119,7 +119,7 @@ The system is mobile-first and verified at 320, 375, 414, and 768px. Root
 `html` and `body` use `overflow-x: clip`. Upload work surfaces collapse from
 primary surface + constraints panel to a single column. History keeps a real
 `table` and real `td` order in the DOM, then presents each row as a readable
-stacked card below the content breakpoint. Date and Exercise cells remain
+stacked card below the content breakpoint. Activity date and Activity type cells remain
 visible on mobile. Table cells use `min-width: 0` and long filenames can break
 inside their content without making the document scroll.
 

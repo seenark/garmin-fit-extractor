@@ -1,5 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import type { ExtractionPage, ExtractionSummary } from "../lib/api-types";
+import { formatDate, formatDateTime, formatFileSize } from "../lib/formatters";
 
 interface HistoryTableProps {
   page: ExtractionPage;
@@ -7,12 +8,6 @@ interface HistoryTableProps {
   deletingId: string | null;
   onDelete: (item: ExtractionSummary) => void;
   onPageChange: (offset: number) => void;
-}
-
-function formatSize(bytes: number): string {
-  return bytes < 1024 * 1024
-    ? `${Math.round(bytes / 1024)} KiB`
-    : `${(bytes / (1024 * 1024)).toFixed(1)} MiB`;
 }
 
 export function HistoryTable({
@@ -39,9 +34,9 @@ export function HistoryTable({
           </svg>
         </span>
         <h2 id="empty-history-title">No uploads yet.</h2>
-        <p>Upload a ZIP archive to see extracted activity data here.</p>
+        <p>Upload a ZIP file to see extracted activity data here.</p>
         <Link className="button secondary" to="/">
-          Upload a ZIP archive
+          Upload a ZIP file
         </Link>
       </section>
     );
@@ -56,16 +51,18 @@ export function HistoryTable({
             Activity records are ordered by the date recorded in each archive.
           </p>
         </div>
-        <span className="history-total">{page.total} total</span>
+        <span className="history-total">
+          {page.total} saved {page.total === 1 ? "extraction" : "extractions"}
+        </span>
       </div>
       <div className="table-wrap">
         <table data-testid="history-table">
           <thead>
             <tr>
-              <th>File</th>
-              <th>Size</th>
-              <th>Date</th>
-              <th>Exercise</th>
+              <th>File name</th>
+              <th>File size</th>
+              <th>Activity date</th>
+              <th>Activity type</th>
               <th>Uploaded</th>
               <th>Status</th>
               <th>Actions</th>
@@ -76,19 +73,15 @@ export function HistoryTable({
               const succeeded = item.status === "succeeded";
               return (
                 <tr key={item.id}>
-                  <td className="file-cell" data-label="File">
+                  <td className="file-cell" data-label="File name">
                     {item.fileName}
                   </td>
-                  <td data-label="Size">{formatSize(item.fileSizeBytes)}</td>
-                  <td data-label="Date">
-                    {item.activityDate
-                      ? new Date(item.activityDate).toLocaleDateString()
-                      : "Unknown"}
+                  <td data-label="File size">{formatFileSize(item.fileSizeBytes)}</td>
+                  <td data-label="Activity date">{formatDate(item.activityDate)}</td>
+                  <td data-label="Activity type">
+                    {item.activityType ?? "Activity type not recorded"}
                   </td>
-                  <td data-label="Exercise">{item.activityType ?? "Unknown"}</td>
-                  <td data-label="Uploaded">
-                    {new Date(item.createdAt).toLocaleString()}
-                  </td>
+                  <td data-label="Uploaded">{formatDateTime(item.createdAt)}</td>
                   <td data-label="Status">
                     <span className={`status-badge ${succeeded ? "success" : "failed"}`}>
                       <span className="status-dot" aria-hidden="true" />

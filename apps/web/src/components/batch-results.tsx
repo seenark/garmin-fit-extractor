@@ -9,11 +9,11 @@ export function BatchResults({ result }: { result: BatchCreateResponse }) {
         <div>
           <h2 id="batch-results-title">ZIP extraction results</h2>
           <p className="section-note">
-            Open a successful extraction for normalized analysis and raw decoded JSON.
+            Open a successful result to review the analysis or download the original data.
           </p>
         </div>
         <span className="selection-count">
-          {result.items.length} {result.items.length === 1 ? "archive" : "archives"}
+          {result.items.length} {result.items.length === 1 ? "file" : "files"}
         </span>
       </div>
       <ul className="result-list">

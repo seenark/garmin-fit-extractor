@@ -56,17 +56,17 @@ test("authenticates, uploads ZIP members, copies raw JSON, and isolates history"
   const successfulResult = batchResults.nth(0);
   await successfulResult.getByRole("link", { name: "View details" }).click();
   await expect(page).toHaveURL(/\/extractions\/[0-9a-f-]{36}(?:\?.*)?$/i);
-  await expect(page.getByRole("tab", { name: "Summary" })).toBeVisible();
+  await expect(page.getByRole("tab", { name: "Analysis" })).toBeVisible();
 
   const normalizedDownload = page.waitForEvent("download");
-  await page.getByRole("button", { name: "Download normalized JSON" }).click();
+  await page.getByRole("button", { name: "Download analysis JSON" }).click();
   const normalizedPath = await (await normalizedDownload).path();
   expect(normalizedPath).not.toBeNull();
   expect(JSON.parse(await readFile(normalizedPath!, "utf8"))).toMatchObject({
     schemaVersion: "1.0.0",
   });
 
-  await page.getByRole("tab", { name: "Raw" }).click();
+  await page.getByRole("tab", { name: "Raw data" }).click();
   await expect(page.getByTestId("raw-json-view")).toContainText('"kind"');
   await page.getByRole("button", { name: "Copy raw JSON" }).click();
   await expect(page.getByRole("button", { name: "Copied" })).toBeVisible();
@@ -102,8 +102,8 @@ test("authenticates, uploads ZIP members, copies raw JSON, and isolates history"
   const historyTable = page.getByTestId("history-table");
   await expect(historyTable).toContainText("activity.zip::activity.fit");
   await expect(historyTable).toContainText("corrupt.zip");
-  await expect(historyTable).toContainText("Date");
-  await expect(historyTable).toContainText("Exercise");
+  await expect(historyTable).toContainText("Activity date");
+  await expect(historyTable).toContainText("Activity type");
 
   await page.getByLabel("Order").selectOption("asc");
   await expect(page).toHaveURL(/\/history\?.*order=asc/);

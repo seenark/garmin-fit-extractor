@@ -4,6 +4,7 @@ import { useState } from "react";
 import { AnalysisSummary } from "../components/analysis-summary";
 import { RawJsonView } from "../components/raw-json-view";
 import { ApiError, downloadExtraction, getExtraction } from "../lib/api";
+import { formatDateTime } from "../lib/formatters";
 
 export const Route = createFileRoute("/extractions/$id")({
   validateSearch: (search: Record<string, unknown>) => ({
@@ -56,12 +57,12 @@ function ExtractionDetailPage() {
       <section className="card">
         <h1>{detail.fileName}</h1>
         <p className="failed">Failed</p>
-        <p>{new Date(detail.createdAt).toLocaleString()}</p>
+        <p>{formatDateTime(detail.createdAt)}</p>
         <div className="error" role="alert">
           {detail.error?.message ?? "This extraction failed."}
         </div>
         <p>
-          <Link to="/history" search={search}>
+          <Link className="button quiet" to="/history" search={search}>
             Return to history
           </Link>
         </p>
@@ -76,7 +77,7 @@ function ExtractionDetailPage() {
           <h1>{detail.fileName}</h1>
           <p className="success">Succeeded</p>
         </div>
-        <Link to="/history" search={search}>
+        <Link className="button quiet" to="/history" search={search}>
           Back to history
         </Link>
       </div>
@@ -93,7 +94,7 @@ function ExtractionDetailPage() {
           aria-controls="summary-panel"
           onClick={() => setTab("summary")}
         >
-          Summary
+          Analysis
         </button>
         <button
           type="button"
@@ -102,7 +103,7 @@ function ExtractionDetailPage() {
           aria-controls="raw-panel"
           onClick={() => setTab("raw")}
         >
-          Raw
+          Raw data
         </button>
       </div>
       {tab === "summary" ? (
@@ -113,7 +114,7 @@ function ExtractionDetailPage() {
               disabled={downloading !== null}
               onClick={() => download("normalized")}
             >
-              Download normalized JSON
+              Download analysis JSON
             </button>
           </div>
           <AnalysisSummary analysis={detail.normalized!} />

@@ -1,4 +1,5 @@
-/* Hallmark · modern-minimal technical workbench · cobalt anchor · floating pill shell */
+/* Hallmark · macrostructure: Workbench · tone: technical · anchor hue: Catppuccin Latte */
+/* Hallmark · pre-emit critique: P5 H4 E5 S5 R5 V4 · contrast: pass (40–41) · mobile: pass (34, 49, 50–57) */
 @import "../../../tokens.css";
 @import url("https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500..800&family=IBM+Plex+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap");
 
@@ -176,6 +177,7 @@ button.danger:disabled {
   display: inline-flex;
   flex: 0 1 auto;
   gap: var(--space-xs);
+  min-height: 2.75rem;
   min-width: 0;
   text-decoration: none;
 }
@@ -219,9 +221,12 @@ nav {
 }
 
 nav a {
+  align-items: center;
   border-radius: var(--radius-pill);
   color: var(--color-muted);
+  display: inline-flex;
   font-size: var(--text-sm);
+  min-height: 2.75rem;
   padding: var(--space-xs) var(--space-sm);
   text-decoration: none;
   white-space: nowrap;
@@ -257,7 +262,7 @@ nav a[aria-current="page"] {
 
 .account-area .quiet {
   font-size: var(--text-sm);
-  min-height: 2.25rem;
+  min-height: 2.75rem;
   padding-inline: var(--space-sm);
 }
 
@@ -308,6 +313,18 @@ nav a[aria-current="page"] {
 
 .page-intro-action {
   flex: 0 0 auto;
+}
+
+.actions {
+  align-items: flex-start;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-md);
+  justify-content: space-between;
+}
+
+.actions > :first-child {
+  min-width: 0;
 }
 
 .card {
@@ -727,7 +744,7 @@ tbody tr:hover td {
 
 .table-actions .button,
 .table-actions button {
-  min-height: 2.25rem;
+  min-height: 2.75rem;
   padding-inline: var(--space-sm);
 }
 
@@ -855,7 +872,7 @@ tbody tr:hover td {
   border-bottom: var(--rule-emphasis) solid transparent;
   border-radius: 0;
   color: var(--color-muted);
-  min-height: 2.5rem;
+  min-height: 2.75rem;
   padding-inline: var(--space-sm);
 }
 
@@ -880,6 +897,7 @@ tbody tr:hover td {
   background: var(--color-paper-2);
   border: var(--rule-thin) solid var(--color-rule);
   border-radius: var(--radius-control);
+  min-width: 0;
   padding: var(--space-sm);
 }
 
@@ -893,7 +911,9 @@ tbody tr:hover td {
   font-family: var(--font-mono);
   font-size: var(--text-md);
   font-weight: var(--font-weight-semibold);
+  line-height: var(--leading-body);
   margin: var(--space-2xs) 0 0;
+  overflow-wrap: anywhere;
 }
 
 .card h3 {
@@ -938,7 +958,9 @@ pre {
   }
 
   table {
+    max-width: 100%;
     min-width: 0;
+    table-layout: fixed;
   }
 
   .table-wrap {
@@ -968,7 +990,10 @@ pre {
     box-shadow: var(--shadow-card);
     display: grid;
     gap: 0;
+    max-width: 100%;
+    min-width: 0;
     padding: var(--space-sm);
+    width: 100%;
   }
 
   tbody tr:hover td {
@@ -980,6 +1005,9 @@ pre {
     display: grid;
     gap: var(--space-sm);
     grid-template-columns: minmax(5.75rem, 0.42fr) minmax(0, 1fr);
+    max-width: 100%;
+    min-width: 0;
+    overflow-wrap: anywhere;
     padding: var(--space-xs) 0;
   }
 

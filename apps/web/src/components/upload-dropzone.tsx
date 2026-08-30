@@ -1,5 +1,6 @@
 import { useState } from "react";
 
+import { formatFileSize } from "../lib/formatters";
 import { validateFiles } from "../lib/upload-validation";
 
 interface UploadDropzoneProps {
@@ -7,10 +8,6 @@ interface UploadDropzoneProps {
   disabled: boolean;
   onFilesChange: (files: File[]) => void;
   onSubmit: () => void;
-}
-
-function formatBytes(bytes: number): string {
-  return `${(bytes / (1024 * 1024)).toFixed(bytes >= 1024 * 1024 ? 1 : 2)} MiB`;
 }
 
 export function UploadDropzone({
@@ -30,14 +27,15 @@ export function UploadDropzone({
     <section className="card upload-card" aria-labelledby="upload-card-title">
       <div className="section-heading">
         <div>
-          <h2 id="upload-card-title">Choose ZIP archives</h2>
+          <h2 id="upload-card-title">Choose ZIP files</h2>
           <p className="section-note">
-            Drop a batch into the intake surface, or use the file picker when
-            drag and drop is not available.
+            Drop files here, or use Choose files if drag and drop is unavailable.
           </p>
         </div>
         <span className="selection-count" aria-live="polite">
-          {files.length === 0 ? "No files selected" : `${files.length} selected`}
+          {files.length === 0
+            ? "No files selected"
+            : `${files.length} ${files.length === 1 ? "file" : "files"} selected`}
         </span>
       </div>
 
@@ -81,7 +79,7 @@ export function UploadDropzone({
           <path d="M16 21V5m0 0-5 5m5-5 5 5" />
           <path d="M7 17v8h18v-8" />
         </svg>
-        <span className="dropzone-title">Drop ZIP archives here</span>
+        <span className="dropzone-title">Drop ZIP files here</span>
         <span className="dropzone-copy">or choose them from your computer</span>
         <span className="button secondary" aria-hidden="true">
           Choose files
@@ -93,7 +91,7 @@ export function UploadDropzone({
           {files.map((file, index) => (
             <li key={`${file.name}-${file.size}-${index}`} data-testid="selected-file">
               <span className="file-name">
-                {file.name} <span className="file-size">{formatBytes(file.size)}</span>
+                {file.name} <span className="file-size">{formatFileSize(file.size)}</span>
               </span>
               <button
                 className="remove-file"
@@ -123,7 +121,7 @@ export function UploadDropzone({
       ) : null}
 
       <div className="upload-actions">
-        <span className="section-note">ZIP only · 20 MiB maximum per file</span>
+        <span className="section-note">ZIP files only · 20 megabytes maximum per file</span>
         <button
           type="button"
           data-testid="upload-submit"
@@ -131,7 +129,7 @@ export function UploadDropzone({
           aria-busy={disabled}
           onClick={onSubmit}
         >
-          {disabled ? "Uploading and extracting…" : "Upload ZIP archives"}
+          {disabled ? "Uploading and extracting…" : "Upload ZIP files"}
         </button>
       </div>
     </section>

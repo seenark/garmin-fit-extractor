@@ -29,10 +29,10 @@ describe("validateFiles", () => {
       "bad\u0000.zip contains an invalid control character.",
     ]);
     expect(validateFiles([file("large.zip", 20 * 1024 * 1024 + 1)])).toEqual([
-      "large.zip exceeds the 20 MiB limit.",
+      "large.zip is larger than the 20-megabyte upload limit.",
     ]);
     expect(validateFiles([file(`${"é".repeat(128)}.zip`)])).toEqual([
-      `${"é".repeat(128)}.zip exceeds the 255-byte file-name limit.`,
+      `${"é".repeat(128)}.zip has a file name longer than 255 bytes.`,
     ]);
   });
 });

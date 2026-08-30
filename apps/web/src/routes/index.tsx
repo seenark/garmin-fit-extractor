@@ -42,10 +42,10 @@ function UploadPage() {
     <div className="page-stack">
       <header className="page-intro">
         <div>
-          <h1>Upload Garmin ZIP archives</h1>
+          <h1>Upload Garmin ZIP files</h1>
           <p className="page-lede">
-            Upload 1–10 ZIP archives, up to 20 MiB each. Extracted FIT members
-            are processed but never retained.
+            Upload 1–10 ZIP files, up to 20 megabytes each. Extracted FIT files
+            are processed and then discarded.
           </p>
         </div>
         <Link
@@ -53,7 +53,7 @@ function UploadPage() {
           to="/history"
           search={{ offset: 0, order: "desc" }}
         >
-          Open history
+          View history
         </Link>
       </header>
 
@@ -65,20 +65,20 @@ function UploadPage() {
           onSubmit={submit}
         />
         <aside className="constraints-panel" aria-labelledby="constraints-title">
-          <h2 id="constraints-title">Upload constraints</h2>
-          <p>Keep the source archive close; the extracted activity data is not retained.</p>
+          <h2 id="constraints-title">Upload requirements</h2>
+          <p>The source ZIP stays private; extracted FIT files are discarded after processing.</p>
           <ul className="constraint-list">
             <li>
-              <span className="constraint-label">Input</span>
-              <span className="constraint-value">ZIP archives</span>
+              <span className="constraint-label">Accepted files</span>
+              <span className="constraint-value">ZIP files</span>
             </li>
             <li>
-              <span className="constraint-label">Batch</span>
+              <span className="constraint-label">Files per upload</span>
               <span className="constraint-value">1–10 files</span>
             </li>
             <li>
-              <span className="constraint-label">Limit</span>
-              <span className="constraint-value">20 MiB per file</span>
+              <span className="constraint-label">Maximum size</span>
+              <span className="constraint-value">20 megabytes per file</span>
             </li>
           </ul>
         </aside>

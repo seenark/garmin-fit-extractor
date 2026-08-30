@@ -87,7 +87,7 @@ impl ApiError {
         Self::new(
             StatusCode::BAD_REQUEST,
             "FILE_TOO_LARGE",
-            "Uploaded ZIP or extracted FIT member exceeds the 20 MiB limit.",
+            "Uploaded ZIP or extracted FIT file is larger than the 20-megabyte limit.",
         )
     }
     pub const fn invalid_zip() -> Self {
