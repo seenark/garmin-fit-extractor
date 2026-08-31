@@ -9,6 +9,7 @@ import {
   listExtractions,
 } from "../lib/api";
 import type { ExtractionSummary } from "../lib/api-types";
+import { formatApiError } from "../lib/copy";
 
 export const Route = createFileRoute("/history")({
   validateSearch: (search: Record<string, unknown>) => ({
@@ -75,8 +76,8 @@ function HistoryPage() {
     } catch (cause) {
       setError(
         cause instanceof ApiError
-          ? cause.message
-          : "History could not be updated.",
+          ? formatApiError(cause)
+          : "อัปเดตประวัติไม่สำเร็จ ลองใหม่อีกครั้ง",
       );
     } finally {
       setBusy(false);
@@ -87,20 +88,20 @@ function HistoryPage() {
     <div className="page-stack">
       <header className="page-intro">
         <div>
-          <h1>History</h1>
+          <h1>ประวัติ</h1>
           <p className="page-lede">
-            Review extracted activity data, open a record, or remove stored
-            results from this account.
+            เปิดดูข้อมูลกิจกรรมที่แยกไว้แล้ว ดูรายละเอียด
+            หรือลบผลลัพธ์ที่บันทึกไว้ในบัญชีนี้
           </p>
         </div>
-        <span className="history-total" aria-label={`${page.total} total extractions`}>
-          {page.total} {page.total === 1 ? "extraction" : "extractions"}
+        <span className="history-total" aria-label={`${page.total} รายการ`}>
+          {page.total} รายการ
         </span>
       </header>
 
       <div className="history-toolbar">
         <label className="field-label" htmlFor="history-order">
-          <span>Order</span>
+          <span>เรียงลำดับ</span>
           <select
             id="history-order"
             value={search.order}
@@ -114,8 +115,8 @@ function HistoryPage() {
               })
             }
           >
-            <option value="desc">Newest activity first</option>
-            <option value="asc">Oldest activity first</option>
+            <option value="desc">กิจกรรมใหม่สุดก่อน</option>
+            <option value="asc">กิจกรรมเก่าสุดก่อน</option>
           </select>
         </label>
         <button
@@ -124,7 +125,7 @@ function HistoryPage() {
           disabled={busy || page.total === 0}
           onClick={() => setTarget("all")}
         >
-          Clear history
+          ล้างประวัติ
         </button>
       </div>
 
@@ -148,14 +149,14 @@ function HistoryPage() {
       {target ? (
         <ConfirmDeleteDialog
           title={
-            target === "all" ? "Clear history?" : `Delete ${target.fileName}?`
+            target === "all" ? "ล้างประวัติทั้งหมดไหม?" : `ลบ ${target.fileName} ไหม?`
           }
           description={
             target === "all"
-              ? "This permanently removes every extraction from history."
-              : "This permanently removes this extraction and both stored JSON views."
+              ? "รายการที่แยกข้อมูลไว้ทั้งหมดจะถูกลบออกจากประวัติอย่างถาวร"
+              : "รายการนี้และ JSON ทั้งสองแบบจะถูกลบอย่างถาวร"
           }
-          confirmLabel={target === "all" ? "Clear history" : "Delete"}
+          confirmLabel={target === "all" ? "ล้างประวัติ" : "ลบรายการ"}
           busy={busy}
           onConfirm={confirmDelete}
           onCancel={() => setTarget(null)}

@@ -5,6 +5,7 @@ import { BatchResults } from "../components/batch-results";
 import { UploadDropzone } from "../components/upload-dropzone";
 import { ApiError, createExtractions } from "../lib/api";
 import type { BatchCreateResponse } from "../lib/api-types";
+import { formatApiError } from "../lib/copy";
 
 export const Route = createFileRoute("/upload")({ component: UploadPage });
 
@@ -24,8 +25,8 @@ function UploadPage() {
     } catch (cause) {
       setError(
         cause instanceof ApiError
-          ? cause.message
-          : "The upload could not be completed.",
+          ? formatApiError(cause)
+          : "อัปโหลดไม่สำเร็จ ลองใหม่อีกครั้ง",
       );
     } finally {
       setUploading(false);
@@ -42,10 +43,10 @@ function UploadPage() {
     <div className="page-stack">
       <header className="page-intro">
         <div>
-          <h1>Upload Garmin ZIP files</h1>
+          <h1>อัปโหลดไฟล์ ZIP จาก Garmin</h1>
           <p className="page-lede">
-            Upload 1–10 ZIP files, up to 20 megabytes each. Extracted FIT files
-            are processed and then discarded.
+            อัปโหลดไฟล์ ZIP ได้ครั้งละ 1–10 ไฟล์ ขนาดไม่เกิน 20 เมกะไบต์ต่อไฟล์
+            ระบบจะแยกไฟล์ FIT ออกมาอ่าน แล้วลบทิ้งหลังประมวลผลเสร็จ
           </p>
         </div>
         <Link
@@ -53,7 +54,7 @@ function UploadPage() {
           to="/history"
           search={{ offset: 0, order: "desc" }}
         >
-          View history
+          ดูประวัติ
         </Link>
       </header>
 
@@ -65,20 +66,20 @@ function UploadPage() {
           onSubmit={submit}
         />
         <aside className="constraints-panel" aria-labelledby="constraints-title">
-          <h2 id="constraints-title">Upload requirements</h2>
-          <p>The source ZIP stays private; extracted FIT files are discarded after processing.</p>
+          <h2 id="constraints-title">ข้อกำหนดการอัปโหลด</h2>
+          <p>ไฟล์ ZIP ต้นฉบับจะถูกเก็บเป็นส่วนตัว ไฟล์ FIT ที่แยกออกมาจะถูกลบทิ้งหลังประมวลผล</p>
           <ul className="constraint-list">
             <li>
-              <span className="constraint-label">Accepted files</span>
-              <span className="constraint-value">ZIP files</span>
+              <span className="constraint-label">ไฟล์ที่รับ</span>
+              <span className="constraint-value">ไฟล์ ZIP</span>
             </li>
             <li>
-              <span className="constraint-label">Files per upload</span>
-              <span className="constraint-value">1–10 files</span>
+              <span className="constraint-label">จำนวนไฟล์ต่อครั้ง</span>
+              <span className="constraint-value">1–10 ไฟล์</span>
             </li>
             <li>
-              <span className="constraint-label">Maximum size</span>
-              <span className="constraint-value">20 megabytes per file</span>
+              <span className="constraint-label">ขนาดสูงสุด</span>
+              <span className="constraint-value">20 เมกะไบต์ต่อไฟล์</span>
             </li>
           </ul>
         </aside>

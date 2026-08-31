@@ -1,6 +1,12 @@
 import { Link } from "@tanstack/react-router";
 import type { ExtractionPage, ExtractionSummary } from "../lib/api-types";
-import { formatDate, formatDateTime, formatFileSize } from "../lib/formatters";
+import { formatApiError } from "../lib/copy";
+import {
+  formatActivityType,
+  formatDate,
+  formatDateTime,
+  formatFileSize,
+} from "../lib/formatters";
 
 interface HistoryTableProps {
   page: ExtractionPage;
@@ -33,10 +39,10 @@ export function HistoryTable({
             <path d="M8 9h8M8 13h5" />
           </svg>
         </span>
-        <h2 id="empty-history-title">No uploads yet.</h2>
-        <p>Upload a ZIP file to see extracted activity data here.</p>
+        <h2 id="empty-history-title">ยังไม่มีไฟล์ที่อัปโหลด</h2>
+        <p>อัปโหลด ZIP แล้วข้อมูลกิจกรรมที่แยกได้จะแสดงที่นี่</p>
         <Link className="button secondary" to="/upload">
-          Upload a ZIP file
+          อัปโหลดไฟล์ ZIP
         </Link>
       </section>
     );
@@ -46,26 +52,26 @@ export function HistoryTable({
     <section className="card history-card" aria-labelledby="history-table-title">
       <div className="section-heading">
         <div>
-          <h2 id="history-table-title">Recent extractions</h2>
+          <h2 id="history-table-title">รายการที่แยกข้อมูลล่าสุด</h2>
           <p className="section-note">
-            Activity records are ordered by the date recorded in each archive.
+            รายการเรียงตามวันที่ของกิจกรรมในแต่ละไฟล์
           </p>
         </div>
         <span className="history-total">
-          {page.total} saved {page.total === 1 ? "extraction" : "extractions"}
+          {page.total} รายการที่บันทึกไว้
         </span>
       </div>
       <div className="table-wrap">
         <table data-testid="history-table">
           <thead>
             <tr>
-              <th>File name</th>
-              <th>File size</th>
-              <th>Activity date</th>
-              <th>Activity type</th>
-              <th>Uploaded</th>
-              <th>Status</th>
-              <th>Actions</th>
+              <th>ชื่อไฟล์</th>
+              <th>ขนาดไฟล์</th>
+              <th>วันที่กิจกรรม</th>
+              <th>ประเภทกิจกรรม</th>
+              <th>อัปโหลดเมื่อ</th>
+              <th>สถานะ</th>
+              <th>การทำงาน</th>
             </tr>
           </thead>
           <tbody>
@@ -73,25 +79,27 @@ export function HistoryTable({
               const succeeded = item.status === "succeeded";
               return (
                 <tr key={item.id}>
-                  <td className="file-cell" data-label="File name">
+                  <td className="file-cell" data-label="ชื่อไฟล์">
                     {item.fileName}
                   </td>
-                  <td data-label="File size">{formatFileSize(item.fileSizeBytes)}</td>
-                  <td data-label="Activity date">{formatDate(item.activityDate)}</td>
-                  <td data-label="Activity type">
-                    {item.activityType ?? "Activity type not recorded"}
+                  <td data-label="ขนาดไฟล์">{formatFileSize(item.fileSizeBytes)}</td>
+                  <td data-label="วันที่กิจกรรม">{formatDate(item.activityDate)}</td>
+                  <td data-label="ประเภทกิจกรรม">
+                    {item.activityType
+                      ? formatActivityType(item.activityType)
+                      : "ไม่ได้บันทึกประเภทกิจกรรม"}
                   </td>
-                  <td data-label="Uploaded">{formatDateTime(item.createdAt)}</td>
-                  <td data-label="Status">
+                  <td data-label="อัปโหลดเมื่อ">{formatDateTime(item.createdAt)}</td>
+                  <td data-label="สถานะ">
                     <span className={`status-badge ${succeeded ? "success" : "failed"}`}>
                       <span className="status-dot" aria-hidden="true" />
-                      {succeeded ? "Succeeded" : "Failed"}
+                      {succeeded ? "สำเร็จ" : "ไม่สำเร็จ"}
                     </span>
                     {item.error ? (
-                      <span className="table-error">{item.error.message}</span>
+                      <span className="table-error">{formatApiError(item.error)}</span>
                     ) : null}
                   </td>
-                  <td data-label="Actions">
+                  <td data-label="การทำงาน">
                     <div className="table-actions">
                       <Link
                         className="button secondary"
@@ -99,16 +107,16 @@ export function HistoryTable({
                         params={{ id: item.id }}
                         search={{ offset: page.offset, order }}
                       >
-                        Open
+                        เปิดดู
                       </Link>
                       <button
                         className="danger"
                         type="button"
                         disabled={deletingId !== null}
-                        aria-label={`Delete ${item.fileName}`}
+                        aria-label={`ลบ ${item.fileName}`}
                         onClick={() => onDelete(item)}
                       >
-                        Delete
+                        ลบ
                       </button>
                     </div>
                   </td>
@@ -125,10 +133,10 @@ export function HistoryTable({
           disabled={page.offset === 0 || deletingId !== null}
           onClick={() => onPageChange(Math.max(0, page.offset - page.limit))}
         >
-          Previous
+          ก่อนหน้า
         </button>
         <span>
-          {page.offset + 1}–{Math.min(page.offset + page.items.length, page.total)} of {page.total}
+          {page.offset + 1}–{Math.min(page.offset + page.items.length, page.total)} จาก {page.total}
         </span>
         <button
           className="secondary"
@@ -138,7 +146,7 @@ export function HistoryTable({
           }
           onClick={() => onPageChange(page.offset + page.limit)}
         >
-          Next
+          ถัดไป
         </button>
       </div>
     </section>

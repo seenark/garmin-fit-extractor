@@ -1,6 +1,7 @@
 import { Link, Outlet, createRootRoute, useRouter } from "@tanstack/react-router";
 import { useState } from "react";
 import { ApiError, getCurrentUser, logout, startGoogleLogin } from "../lib/api";
+import { formatApiError } from "../lib/copy";
 
 type RootSearch = { authError?: "AUTH_FAILED" };
 
@@ -27,13 +28,13 @@ export const Route = createRootRoute({
       <main className="shell page">
         <section className="card error">
           <div>
-            <h1>Something went wrong</h1>
+            <h1>เกิดข้อผิดพลาด</h1>
             <p>
-              {error instanceof Error
-                ? error.message
-                : "The requested page could not be loaded."}
+              {error instanceof ApiError
+                ? formatApiError(error)
+                : "โหลดหน้านี้ไม่สำเร็จ ลองใหม่อีกครั้ง"}
             </p>
-            <Link to="/">Return home</Link>
+            <Link to="/">กลับหน้าหลัก</Link>
           </div>
         </section>
       </main>
@@ -46,14 +47,14 @@ function SignInScreen({ authError = false }: { authError?: boolean }) {
       <section className="card auth-card">
         <span className="brand-mark" aria-hidden="true">FIT</span>
         <h1>Garmin FIT Extractor</h1>
-        <p>Sign in with Google to continue.</p>
+        <p>เข้าสู่ระบบด้วย Google เพื่อไปต่อ</p>
         {authError ? (
           <p className="error" role="alert">
-            <span>Google sign-in failed. Try again.</span>
+            <span>เข้าสู่ระบบด้วย Google ไม่สำเร็จ ลองใหม่อีกครั้ง</span>
           </p>
         ) : null}
         <button type="button" onClick={startGoogleLogin}>
-          Continue with Google
+          เข้าสู่ระบบด้วย Google
         </button>
       </section>
     </main>
@@ -77,19 +78,19 @@ function RootLayout() {
           <span className="brand-mark" aria-hidden="true">FIT</span>
           <span className="brand-text">Garmin FIT Extractor</span>
         </Link>
-        <nav aria-label="Main navigation">
+        <nav aria-label="เมนูหลัก">
           <Link to="/" activeProps={{ "aria-current": "page" }}>
-            Home
+            หน้าหลัก
           </Link>
           <Link to="/upload" activeProps={{ "aria-current": "page" }}>
-            Upload
+            อัปโหลด
           </Link>
           <Link
             to="/history"
             search={{ offset: 0, order: "desc" }}
             activeProps={{ "aria-current": "page" }}
           >
-            History
+            ประวัติ
           </Link>
         </nav>
         <div className="account-area">
@@ -109,7 +110,7 @@ function RootLayout() {
               }
             }}
           >
-            Sign out
+            ออกจากระบบ
           </button>
         </div>
       </header>

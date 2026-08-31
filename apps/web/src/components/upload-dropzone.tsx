@@ -27,15 +27,15 @@ export function UploadDropzone({
     <section className="card upload-card" aria-labelledby="upload-card-title">
       <div className="section-heading">
         <div>
-          <h2 id="upload-card-title">Choose ZIP files</h2>
+          <h2 id="upload-card-title">เลือกไฟล์ ZIP</h2>
           <p className="section-note">
-            Drop files here, or use Choose files if drag and drop is unavailable.
+            ลากไฟล์มาวางที่นี่ หรือกดเลือกไฟล์จากคอมพิวเตอร์ก็ได้
           </p>
         </div>
         <span className="selection-count" aria-live="polite">
           {files.length === 0
-            ? "No files selected"
-            : `${files.length} ${files.length === 1 ? "file" : "files"} selected`}
+            ? "ยังไม่ได้เลือกไฟล์"
+            : `${files.length} ไฟล์ที่เลือก`}
         </span>
       </div>
 
@@ -57,7 +57,7 @@ export function UploadDropzone({
       >
         <input
           className="file-input"
-          aria-label="Choose ZIP files"
+          aria-label="เลือกไฟล์ ZIP"
           type="file"
           accept=".zip,.ZIP"
           multiple
@@ -79,15 +79,15 @@ export function UploadDropzone({
           <path d="M16 21V5m0 0-5 5m5-5 5 5" />
           <path d="M7 17v8h18v-8" />
         </svg>
-        <span className="dropzone-title">Drop ZIP files here</span>
-        <span className="dropzone-copy">or choose them from your computer</span>
+        <span className="dropzone-title">ลากไฟล์ ZIP มาวางที่นี่</span>
+        <span className="dropzone-copy">หรือเลือกจากคอมพิวเตอร์</span>
         <span className="button secondary" aria-hidden="true">
-          Choose files
+          เลือกไฟล์
         </span>
       </label>
 
       {files.length > 0 ? (
-        <ul className="file-list" aria-label="Selected files">
+        <ul className="file-list" aria-label="ไฟล์ที่เลือก">
           {files.map((file, index) => (
             <li key={`${file.name}-${file.size}-${index}`} data-testid="selected-file">
               <span className="file-name">
@@ -96,13 +96,13 @@ export function UploadDropzone({
               <button
                 className="remove-file"
                 type="button"
-                aria-label={`Remove ${file.name}`}
+                aria-label={`เอาไฟล์ ${file.name} ออก`}
                 disabled={disabled}
                 onClick={() =>
                   onFilesChange(files.filter((_, current) => current !== index))
                 }
               >
-                Remove
+                เอาออก
               </button>
             </li>
           ))}
@@ -112,7 +112,7 @@ export function UploadDropzone({
       {errors.length > 0 ? (
         <div className="inline-error" role="alert">
           <div>
-            <strong>Upload needs attention.</strong>
+            <strong>ตรวจสอบไฟล์ที่เลือก</strong>
             {errors.map((error) => (
               <div key={error}>{error}</div>
             ))}
@@ -121,7 +121,7 @@ export function UploadDropzone({
       ) : null}
 
       <div className="upload-actions">
-        <span className="section-note">ZIP files only · 20 megabytes maximum per file</span>
+        <span className="section-note">รับเฉพาะ ZIP · ไม่เกิน 20 เมกะไบต์ต่อไฟล์</span>
         <button
           type="button"
           data-testid="upload-submit"
@@ -129,7 +129,7 @@ export function UploadDropzone({
           aria-busy={disabled}
           onClick={onSubmit}
         >
-          {disabled ? "Uploading and extracting…" : "Upload ZIP files"}
+          {disabled ? "กำลังอัปโหลดและแยกข้อมูล…" : "อัปโหลดไฟล์ ZIP"}
         </button>
       </div>
     </section>

@@ -34,7 +34,7 @@ export function ConfirmDeleteDialog({
             aria-busy={busy}
             onClick={onConfirm}
           >
-            {busy ? "Deleting…" : confirmLabel}
+            {busy ? "กำลังลบ…" : confirmLabel}
           </button>
           <button
             className="secondary"
@@ -42,7 +42,7 @@ export function ConfirmDeleteDialog({
             disabled={busy}
             onClick={onCancel}
           >
-            Cancel
+            ยกเลิก
           </button>
         </div>
       </section>

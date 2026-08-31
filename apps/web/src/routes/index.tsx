@@ -7,11 +7,12 @@ function HomePage() {
     <div className="home-page">
       <section className="home-hero" aria-labelledby="home-title">
         <div className="home-hero-copy">
-          <p className="home-kicker">A closer look at your Garmin data</p>
-          <h1 id="home-title">Read the data your Garmin already captured.</h1>
+          <p className="home-kicker">ดูข้อมูลจาก Garmin ให้ละเอียดขึ้น</p>
+          <h1 id="home-title">ข้อมูลที่ Garmin บันทึกไว้ ยังดูได้ละเอียดกว่านี้</h1>
           <p className="home-lede">
-            Export a Garmin ZIP, open the detailed FIT data, and hand the raw
-            JSON to ChatGPT or Claude when the built-in summary stops short.
+            ส่งออกไฟล์ ZIP จาก Garmin แล้วเปิดดูข้อมูล FIT แบบละเอียดได้เลย
+            ถ้าสรุปที่มีอยู่ยังตอบคำถามไม่พอ ก็คัดลอกข้อมูลดิบ (Raw JSON)
+            ไปถาม ChatGPT หรือ Claude ต่อได้
           </p>
           <div className="home-actions">
             <Link
@@ -19,7 +20,7 @@ function HomePage() {
               data-testid="home-upload-cta"
               to="/upload"
             >
-              Upload ZIP files
+              อัปโหลดไฟล์ ZIP
             </Link>
             <Link
               className="button secondary"
@@ -27,11 +28,11 @@ function HomePage() {
               to="/history"
               search={{ offset: 0, order: "desc" }}
             >
-              View history
+              ดูประวัติ
             </Link>
           </div>
           <p className="home-constraint-note">
-            1–10 ZIP files per upload · 20 megabytes per file
+            อัปโหลดครั้งละ 1–10 ไฟล์ ZIP · ไฟล์ละไม่เกิน 20 เมกะไบต์
           </p>
         </div>
 
@@ -41,18 +42,18 @@ function HomePage() {
           aria-labelledby="workflow-title"
         >
           <figcaption id="workflow-title" className="home-workflow-heading">
-            From Garmin export to an AI-ready handoff
+            จากไฟล์ส่งออกไปจนถึงข้อมูลพร้อมถาม AI
           </figcaption>
           <div className="workflow-board">
             <div className="workflow-node workflow-node--source">
-              <span className="workflow-node-label">01 / Garmin export</span>
+              <span className="workflow-node-label">01 / ไฟล์จาก Garmin</span>
               <span className="workflow-file">
                 <span className="workflow-file-mark" aria-hidden="true">
                   ZIP
                 </span>
                 <span>activity.zip</span>
               </span>
-              <span className="workflow-node-note">The file you export</span>
+              <span className="workflow-node-note">ไฟล์ส่งออกจาก Garmin</span>
             </div>
 
             <div className="workflow-connector" aria-hidden="true">
@@ -60,14 +61,14 @@ function HomePage() {
             </div>
 
             <div className="workflow-node workflow-node--extract">
-              <span className="workflow-node-label">02 / FIT extraction</span>
+              <span className="workflow-node-label">02 / แยกข้อมูล FIT</span>
               <span className="workflow-file">
                 <span className="workflow-file-mark" aria-hidden="true">
                   FIT
                 </span>
                 <span>activity.fit</span>
               </span>
-              <span className="workflow-node-note">Detailed activity records</span>
+              <span className="workflow-node-note">ข้อมูลกิจกรรมแบบละเอียด</span>
             </div>
 
             <div className="workflow-branch" aria-hidden="true">
@@ -77,36 +78,36 @@ function HomePage() {
 
             <div className="workflow-outputs">
               <div className="workflow-output workflow-output--analysis">
-                <span className="workflow-output-label">Normalized analysis</span>
-                <strong>Readable metrics</strong>
-                <span>laps · pace · heart rate</span>
+                <span className="workflow-output-label">วิเคราะห์แบบมาตรฐาน (Normalized)</span>
+                <strong>ตัวเลขอ่านง่าย</strong>
+                <span>รอบ · เพซ · อัตราการเต้นหัวใจ</span>
               </div>
               <div className="workflow-output workflow-output--raw">
-                <span className="workflow-output-label">Raw JSON</span>
-                <strong>Every field in view</strong>
-                <span>ready to copy or download</span>
+                <span className="workflow-output-label">ข้อมูลดิบ (Raw JSON)</span>
+                <strong>เห็นข้อมูลทุกฟิลด์</strong>
+                <span>คัดลอกหรือดาวน์โหลดได้</span>
               </div>
             </div>
 
             <div className="workflow-handoff">
-              <span className="workflow-node-label">03 / AI handoff</span>
+              <span className="workflow-node-label">03 / ส่งต่อให้ AI</span>
               <div className="workflow-ai-list">
                 <span>ChatGPT</span>
                 <span>Claude</span>
               </div>
-              <span className="workflow-node-note">Ask deeper questions of the data</span>
+              <span className="workflow-node-note">ถามรายละเอียดจากข้อมูลได้มากขึ้น</span>
             </div>
           </div>
-          <p className="home-workflow-caption">One export. Two ways to read it.</p>
+          <p className="home-workflow-caption">ไฟล์เดียว ดูได้สองแบบ</p>
         </figure>
       </section>
 
       <section className="home-section home-process" aria-labelledby="process-title">
         <div className="home-section-heading">
-          <h2 id="process-title">Turn a Garmin export into something you can ask about.</h2>
+          <h2 id="process-title">เปลี่ยนไฟล์จาก Garmin ให้เป็นข้อมูลที่ถามต่อได้</h2>
           <p>
-            The workflow stays simple: bring the archive, inspect what the watch
-            recorded, then choose the view that fits your next question.
+            ขั้นตอนมีแค่นี้: เอาไฟล์มา ดูสิ่งที่นาฬิกาบันทึกไว้
+            แล้วเลือกมุมมองที่ตรงกับสิ่งที่อยากรู้
           </p>
         </div>
 
@@ -116,16 +117,17 @@ function HomePage() {
               1.0
             </span>
             <div className="home-step-copy">
-              <h3>Export once from Garmin.</h3>
+              <h3>1. ส่งออกไฟล์จาก Garmin</h3>
               <p>
-                Start with the ZIP file from Garmin’s website. Upload a single
-                activity or a batch of files without changing the source export.
+                เริ่มจากไฟล์ ZIP ที่ดาวน์โหลดจากเว็บไซต์ Garmin
+                จะอัปโหลดกิจกรรมเดียวหรือหลายไฟล์พร้อมกันก็ได้
+                โดยไม่แตะต้องไฟล์ต้นฉบับ
               </p>
             </div>
-            <div className="home-step-proof" aria-label="Upload input">
-              <span className="home-proof-label">Input</span>
+            <div className="home-step-proof" aria-label="ไฟล์เข้า">
+              <span className="home-proof-label">ไฟล์เข้า</span>
               <code>activity.zip</code>
-              <span>Garmin export</span>
+              <span>ไฟล์ส่งออกจาก Garmin</span>
             </div>
           </li>
           <li className="home-step">
@@ -133,17 +135,17 @@ function HomePage() {
               2.0
             </span>
             <div className="home-step-copy">
-              <h3>See more than the headline numbers.</h3>
+              <h3>ดูข้อมูลที่ซ่อนอยู่หลังตัวเลขสรุป</h3>
               <p>
-                Read a normalized view across the activity summary, laps, pace,
-                heart rate, power, cadence, elevation, temperature, and calories.
+                เปิดดูข้อมูลแบบจัดรูปแบบมาตรฐาน (Normalized) ได้ทั้งสรุปกิจกรรม รอบ เพซ
+                อัตราการเต้นหัวใจ กำลัง รอบขา ความสูง อุณหภูมิ และแคลอรี
               </p>
             </div>
-            <div className="home-step-proof home-step-proof--metrics" aria-label="Normalized analysis fields">
-              <span className="home-proof-label">Analysis</span>
-              <span>summary</span>
-              <span>laps</span>
-              <span>running dynamics</span>
+            <div className="home-step-proof home-step-proof--metrics" aria-label="ฟิลด์วิเคราะห์ข้อมูล">
+              <span className="home-proof-label">วิเคราะห์</span>
+              <span>สรุป</span>
+              <span>รอบ</span>
+              <span>ไดนามิกการวิ่ง</span>
             </div>
           </li>
           <li className="home-step">
@@ -151,16 +153,16 @@ function HomePage() {
               3.0
             </span>
             <div className="home-step-copy">
-              <h3>Give the raw data a wider audience.</h3>
+              <h3>เอาข้อมูลดิบไปถามต่อ</h3>
               <p>
-                Open or download raw JSON, then paste it into ChatGPT or Claude
-                for questions that need more context than a standard summary.
+                เปิดหรือดาวน์โหลดข้อมูลดิบ (Raw JSON) แล้วนำไปวางใน ChatGPT หรือ Claude
+                ถ้าคำถามต้องใช้บริบทมากกว่าสรุปทั่วไป
               </p>
             </div>
-            <div className="home-step-proof home-step-proof--json" aria-label="Raw JSON handoff">
-              <span className="home-proof-label">Handoff</span>
+            <div className="home-step-proof home-step-proof--json" aria-label="การส่งต่อ Raw JSON">
+              <span className="home-proof-label">ส่งต่อ</span>
               <code>{'{ "activity": … }'}</code>
-              <span>copy or download</span>
+              <span>คัดลอกหรือดาวน์โหลด</span>
             </div>
           </li>
         </ol>
@@ -168,32 +170,32 @@ function HomePage() {
 
       <section className="home-section home-depth" aria-labelledby="depth-title">
         <div className="home-depth-intro">
-          <h2 id="depth-title">More detail, without losing the source.</h2>
+          <h2 id="depth-title">ดูรายละเอียดเพิ่ม โดยไม่ทิ้งข้อมูลต้นฉบับ</h2>
           <p>
-            Garmin records the detail. This app gives that detail a shape you can
-            inspect, save, and carry into the tools you already use.
+            Garmin บันทึกข้อมูลไว้ละเอียดอยู่แล้ว แอปนี้ช่วยจัดให้อยู่ในรูปที่เปิดดู
+            บันทึก และนำไปใช้กับเครื่องมือที่คุณคุ้นเคยได้ง่ายขึ้น
           </p>
         </div>
         <ul className="home-benefits">
           <li>
-            <h3>Normalized first</h3>
+            <h3>เริ่มจากข้อมูลที่อ่านง่าย</h3>
             <p>
-              Start with consistent labels and human-readable units instead of
-              digging through an unstructured export.
+              เริ่มจากชื่อฟิลด์ที่สม่ำเสมอและหน่วยที่อ่านง่าย
+              ไม่ต้องไล่ดูไฟล์ที่ยังจัดรูปแบบไม่เรียบร้อย
             </p>
           </li>
           <li>
-            <h3>Raw when it matters</h3>
+            <h3>ใช้ข้อมูลดิบ (Raw JSON) เมื่อต้องการรายละเอียด</h3>
             <p>
-              Keep the raw JSON available when a deeper question needs the full
-              record rather than a selected summary.
+              เปิดข้อมูลดิบ (Raw JSON) ได้ทุกเมื่อที่คำถามต้องใช้ข้อมูลทั้งชุด
+              ไม่ใช่แค่ค่าที่อยู่ในสรุป
             </p>
           </li>
           <li>
-            <h3>History when you return</h3>
+            <h3>กลับมาดูประวัติได้</h3>
             <p>
-              Reopen saved extractions later, so the useful work does not end
-              when the first question has been answered.
+              รายการที่แยกข้อมูลไว้จะยังอยู่ให้กลับมาเปิดดูทีหลัง
+              งานจึงไม่จบแค่ตอนตอบคำถามแรกเสร็จ
             </p>
           </li>
         </ul>
@@ -201,22 +203,21 @@ function HomePage() {
 
       <section className="home-closing" aria-labelledby="closing-title">
         <div>
-          <h2 id="closing-title">Start with the export you already have.</h2>
+          <h2 id="closing-title">เริ่มจากไฟล์ที่มีอยู่ได้เลย</h2>
           <p>
-            Upload the ZIP, choose your view, and take the data where your next
-            question lives.
+            อัปโหลด ZIP เลือกมุมมอง แล้วเอาข้อมูลไปใช้กับคำถามต่อไป
           </p>
         </div>
         <div className="home-actions home-closing-actions">
           <Link className="button" to="/upload">
-            Upload ZIP files
+            อัปโหลดไฟล์ ZIP
           </Link>
           <Link
             className="button quiet"
             to="/history"
             search={{ offset: 0, order: "desc" }}
           >
-            View history
+            ดูประวัติ
           </Link>
         </div>
       </section>

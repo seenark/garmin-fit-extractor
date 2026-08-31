@@ -15,24 +15,24 @@ describe("validateFiles", () => {
   });
 
   test("rejects empty and over-limit selections", () => {
-    expect(validateFiles([])).toEqual(["Select at least one ZIP file."]);
+    expect(validateFiles([])).toEqual(["เลือกไฟล์ ZIP อย่างน้อย 1 ไฟล์"]);
     expect(
       validateFiles(Array.from({ length: 11 }, (_, index) => file(`${index}.zip`))),
-    ).toEqual(["Select at most 10 ZIP files."]);
+    ).toEqual(["เลือกได้ไม่เกิน 10 ไฟล์ ZIP"]);
   });
 
   test("rejects invalid suffix, control characters, oversized files, and UTF-8 names over 255 bytes", () => {
     expect(validateFiles([file("activity.gpx")])).toEqual([
-      "activity.gpx must end with .zip.",
+      "activity.gpx ต้องลงท้ายด้วย .zip",
     ]);
     expect(validateFiles([file("bad\u0000.zip")])).toEqual([
-      "bad\u0000.zip contains an invalid control character.",
+      "bad\u0000.zip มีอักขระควบคุมที่ใช้ไม่ได้",
     ]);
     expect(validateFiles([file("large.zip", 20 * 1024 * 1024 + 1)])).toEqual([
-      "large.zip is larger than the 20-megabyte upload limit.",
+      "large.zip มีขนาดเกิน 20 เมกะไบต์",
     ]);
     expect(validateFiles([file(`${"é".repeat(128)}.zip`)])).toEqual([
-      `${"é".repeat(128)}.zip has a file name longer than 255 bytes.`,
+      `${"é".repeat(128)}.zip ยาวเกิน 255 ไบต์`,
     ]);
   });
 });

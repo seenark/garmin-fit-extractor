@@ -4,6 +4,7 @@ import { useState } from "react";
 import { AnalysisSummary } from "../components/analysis-summary";
 import { RawJsonView } from "../components/raw-json-view";
 import { ApiError, downloadExtraction, getExtraction } from "../lib/api";
+import { formatApiError } from "../lib/copy";
 import { formatDateTime } from "../lib/formatters";
 
 export const Route = createFileRoute("/extractions/$id")({
@@ -44,8 +45,8 @@ function ExtractionDetailPage() {
     } catch (cause) {
       setError(
         cause instanceof ApiError
-          ? cause.message
-          : "The JSON download could not be completed.",
+          ? formatApiError(cause)
+          : "ดาวน์โหลด JSON ไม่สำเร็จ ลองใหม่อีกครั้ง",
       );
     } finally {
       setDownloading(null);
@@ -56,14 +57,16 @@ function ExtractionDetailPage() {
     return (
       <section className="card">
         <h1>{detail.fileName}</h1>
-        <p className="failed">Failed</p>
+        <p className="failed">ไม่สำเร็จ</p>
         <p>{formatDateTime(detail.createdAt)}</p>
         <div className="error" role="alert">
-          {detail.error?.message ?? "This extraction failed."}
+          {detail.error
+            ? formatApiError(detail.error)
+            : "การแยกข้อมูลรายการนี้ไม่สำเร็จ"}
         </div>
         <p>
           <Link className="button quiet" to="/history" search={search}>
-            Return to history
+            กลับไปประวัติ
           </Link>
         </p>
       </section>
@@ -75,10 +78,10 @@ function ExtractionDetailPage() {
       <div className="actions">
         <div>
           <h1>{detail.fileName}</h1>
-          <p className="success">Succeeded</p>
+          <p className="success">สำเร็จ</p>
         </div>
         <Link className="button quiet" to="/history" search={search}>
-          Back to history
+          กลับไปประวัติ
         </Link>
       </div>
       {error ? (
@@ -86,7 +89,7 @@ function ExtractionDetailPage() {
           {error}
         </div>
       ) : null}
-      <div className="tabs" role="tablist" aria-label="Extraction views">
+      <div className="tabs" role="tablist" aria-label="มุมมองข้อมูล">
         <button
           type="button"
           role="tab"
@@ -94,7 +97,7 @@ function ExtractionDetailPage() {
           aria-controls="summary-panel"
           onClick={() => setTab("summary")}
         >
-          Analysis
+          วิเคราะห์
         </button>
         <button
           type="button"
@@ -103,7 +106,7 @@ function ExtractionDetailPage() {
           aria-controls="raw-panel"
           onClick={() => setTab("raw")}
         >
-          Raw data
+          ข้อมูลดิบ
         </button>
       </div>
       {tab === "summary" ? (
@@ -114,7 +117,7 @@ function ExtractionDetailPage() {
               disabled={downloading !== null}
               onClick={() => download("normalized")}
             >
-              Download analysis JSON
+              ดาวน์โหลด JSON แบบวิเคราะห์
             </button>
           </div>
           <AnalysisSummary analysis={detail.normalized!} />
@@ -127,7 +130,7 @@ function ExtractionDetailPage() {
               disabled={downloading !== null}
               onClick={() => download("raw")}
             >
-              Download raw JSON
+              ดาวน์โหลด Raw JSON
             </button>
           </div>
           <RawJsonView records={detail.raw!} />

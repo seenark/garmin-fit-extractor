@@ -1,19 +1,20 @@
 import { Link } from "@tanstack/react-router";
 
 import type { BatchCreateResponse } from "../lib/api-types";
+import { formatApiError } from "../lib/copy";
 
 export function BatchResults({ result }: { result: BatchCreateResponse }) {
   return (
     <section className="card results-card" aria-labelledby="batch-results-title">
       <div className="section-heading">
         <div>
-          <h2 id="batch-results-title">ZIP extraction results</h2>
+          <h2 id="batch-results-title">ผลการแยกข้อมูลจาก ZIP</h2>
           <p className="section-note">
-            Open a successful result to review the analysis or download the original data.
+            เปิดรายการที่สำเร็จเพื่อดูผลวิเคราะห์ หรือดาวน์โหลดข้อมูลต้นฉบับ
           </p>
         </div>
         <span className="selection-count">
-          {result.items.length} {result.items.length === 1 ? "file" : "files"}
+          {result.items.length} ไฟล์
         </span>
       </div>
       <ul className="result-list">
@@ -33,10 +34,10 @@ export function BatchResults({ result }: { result: BatchCreateResponse }) {
                 <span className="result-copy">
                   <strong>{item.fileName}</strong>
                   <span className={succeeded ? "success" : "failed"}>
-                    {succeeded ? " · Succeeded" : " · Failed"}
+                    {succeeded ? " · สำเร็จ" : " · ไม่สำเร็จ"}
                   </span>
                   {!succeeded && item.error ? (
-                    <span className="result-error">{item.error.message}</span>
+                    <span className="result-error">{formatApiError(item.error)}</span>
                   ) : null}
                 </span>
               </div>
@@ -47,7 +48,7 @@ export function BatchResults({ result }: { result: BatchCreateResponse }) {
                   params={{ id: item.id }}
                   search={{ offset: 0, order: "desc" }}
                 >
-                  View details
+                  ดูรายละเอียด
                 </Link>
               ) : null}
             </li>
