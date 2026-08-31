@@ -23,6 +23,13 @@ test("authenticates, uploads ZIP members, copies raw JSON, and isolates history"
 
   await page.goto("/api/v1/auth/test-login?user=alice");
   await expect(page.getByText("alice", { exact: true })).toBeVisible();
+  await expect(
+    page.getByRole("heading", {
+      name: "Read the data your Garmin already captured.",
+    }),
+  ).toBeVisible();
+  await page.getByTestId("home-upload-cta").click();
+  await expect(page).toHaveURL(/\/upload$/);
 
   const activityBytes = await readFile(activityArchive);
   const uploadInput = page

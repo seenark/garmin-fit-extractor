@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as HistoryRouteImport } from './routes/history'
+import { Route as UploadRouteImport } from './routes/upload'
 import { Route as ExtractionsIdRouteImport } from './routes/extractions.$id'
 
 const IndexRoute = IndexRouteImport.update({
@@ -23,6 +24,11 @@ const HistoryRoute = HistoryRouteImport.update({
   path: '/history',
   getParentRoute: () => rootRouteImport,
 } as any)
+const UploadRoute = UploadRouteImport.update({
+  id: '/upload',
+  path: '/upload',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ExtractionsIdRoute = ExtractionsIdRouteImport.update({
   id: '/extractions/$id',
   path: '/extractions/$id',
@@ -32,30 +38,34 @@ const ExtractionsIdRoute = ExtractionsIdRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/history': typeof HistoryRoute
+  '/upload': typeof UploadRoute
   '/extractions/$id': typeof ExtractionsIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/history': typeof HistoryRoute
+  '/upload': typeof UploadRoute
   '/extractions/$id': typeof ExtractionsIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/history': typeof HistoryRoute
+  '/upload': typeof UploadRoute
   '/extractions/$id': typeof ExtractionsIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/history' | '/extractions/$id'
+  fullPaths: '/' | '/history' | '/upload' | '/extractions/$id'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/history' | '/extractions/$id'
-  id: '__root__' | '/' | '/history' | '/extractions/$id'
+  to: '/' | '/history' | '/upload' | '/extractions/$id'
+  id: '__root__' | '/' | '/history' | '/upload' | '/extractions/$id'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   HistoryRoute: typeof HistoryRoute
+  UploadRoute: typeof UploadRoute
   ExtractionsIdRoute: typeof ExtractionsIdRoute
 }
 
@@ -75,6 +85,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof HistoryRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/upload': {
+      id: '/upload'
+      path: '/upload'
+      fullPath: '/upload'
+      preLoaderRoute: typeof UploadRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/extractions/$id': {
       id: '/extractions/$id'
       path: '/extractions/$id'
@@ -88,6 +105,7 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   HistoryRoute: HistoryRoute,
+  UploadRoute: UploadRoute,
   ExtractionsIdRoute: ExtractionsIdRoute,
 }
 export const routeTree = rootRouteImport

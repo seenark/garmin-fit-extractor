@@ -20,5 +20,16 @@
     "genre": "modern-minimal",
     "nav": "N5 floating pill",
     "footer": "none"
+  },
+  {
+    "date": "2026-08-30",
+    "scope": "authenticated homepage",
+    "macrostructure": "Narrative Workflow",
+    "theme": "Catppuccin Latte",
+    "enrichment": "none",
+    "brief": "Explain the Garmin export to AI handoff before Upload or History",
+    "genre": "modern-minimal technical",
+    "nav": "N5-inspired existing app shell",
+    "footer": "none"
   }
 ]

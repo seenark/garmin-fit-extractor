@@ -35,7 +35,7 @@ export function HistoryTable({
         </span>
         <h2 id="empty-history-title">No uploads yet.</h2>
         <p>Upload a ZIP file to see extracted activity data here.</p>
-        <Link className="button secondary" to="/">
+        <Link className="button secondary" to="/upload">
           Upload a ZIP file
         </Link>
       </section>

@@ -1,8 +1,9 @@
 # Design — Garmin FIT Extractor
 
-A shared Hallmark design system for the authenticated app surfaces. Upload and
-history are one product, so they share type, color, spacing, navigation, and
-interaction rules rather than rotating through separate page themes.
+A shared Hallmark design system for the authenticated app surfaces. The
+homepage, upload, and history are one product, so they share type, color,
+spacing, navigation, and interaction rules rather than rotating through
+separate page themes.
 
 ## Genre
 
@@ -13,15 +14,19 @@ blue reserved for focus.
 
 ## Macrostructure family
 
-- Marketing pages: not applicable to this authenticated app.
+- Authenticated homepage: **Narrative Workflow**. The homepage explains the
+  real Garmin export → FIT extraction → normalized/raw JSON → AI handoff path,
+  then gives the user clear routes to Upload and History. It may orient and
+  persuade with product-specific proof, but it does not invent stats,
+  testimonials, or decorative marketing sections.
 - App pages: **Workbench**. Upload is action-led with a primary intake surface
   and a factual constraints panel. History is data-led with a live record
   count, order control, destructive clear action, and a responsive data surface.
 - Content pages: not applicable.
-
-App pages may vary their composition within Workbench, but they do not add
-invented stats, decorative imagery, or promotional sections. Function carries
-the page.
+App pages may vary their composition within Workbench. The homepage uses a
+workflow diagram and stage proofs because the workflow itself is the product
+story; it does not add invented stats, decorative imagery, or generic
+promotional sections. Function carries every page.
 
 ## Theme
 
@@ -102,8 +107,8 @@ Motion is functional and quiet.
 Primary actions use short, concrete verbs: `Upload ZIP files`, `Open`,
 `Delete`, and `Clear history`. Secondary actions use equally direct labels:
 `Choose files`, `Previous`, `Next`, and `Cancel`. Navigation stays short:
-`Upload`, `History`, and `Sign out`. Avoid hype, invented metrics, and generic
-success language.
+`Home`, `Upload`, `History`, and `Sign out`. Avoid hype, invented metrics, and
+generic success language.
 
 ## Navigation and app chrome
 
@@ -116,12 +121,14 @@ or decorative footer are added.
 ## Responsive allowances
 
 The system is mobile-first and verified at 320, 375, 414, and 768px. Root
-`html` and `body` use `overflow-x: clip`. Upload work surfaces collapse from
-primary surface + constraints panel to a single column. History keeps a real
-`table` and real `td` order in the DOM, then presents each row as a readable
-stacked card below the content breakpoint. Activity date and Activity type cells remain
-visible on mobile. Table cells use `min-width: 0` and long filenames can break
-inside their content without making the document scroll.
+`html` and `body` use `overflow-x: clip`. The homepage collapses its split
+hero and workflow stages into one readable column while keeping both primary
+routes visible. Upload work surfaces collapse from primary surface +
+constraints panel to a single column. History keeps a real `table` and real
+`td` order in the DOM, then presents each row as a readable stacked card below
+the content breakpoint. Activity date and Activity type cells remain visible
+on mobile. Table cells use `min-width: 0` and long filenames can break inside
+their content without making the document scroll.
 
 App pages may use cards, bordered data surfaces, semantic status badges, and
 technical metadata. They may not use decorative imagery, fake browser chrome,

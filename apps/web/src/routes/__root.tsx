@@ -33,7 +33,7 @@ export const Route = createRootRoute({
                 ? error.message
                 : "The requested page could not be loaded."}
             </p>
-            <Link to="/">Return to upload</Link>
+            <Link to="/">Return home</Link>
           </div>
         </section>
       </main>
@@ -79,6 +79,9 @@ function RootLayout() {
         </Link>
         <nav aria-label="Main navigation">
           <Link to="/" activeProps={{ "aria-current": "page" }}>
+            Home
+          </Link>
+          <Link to="/upload" activeProps={{ "aria-current": "page" }}>
             Upload
           </Link>
           <Link
