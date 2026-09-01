@@ -64,6 +64,10 @@ test("authenticates, uploads ZIP members, copies raw JSON, and isolates history"
   await successfulResult.getByRole("link", { name: "ดูรายละเอียด" }).click();
   await expect(page).toHaveURL(/\/extractions\/[0-9a-f-]{36}(?:\?.*)?$/i);
   await expect(page.getByRole("tab", { name: "วิเคราะห์" })).toBeVisible();
+  await expect(page.getByTestId("activity-chart-pace")).toBeVisible();
+  await expect(
+    page.getByRole("img", { name: "กราฟเพซต่อรอบ" }),
+  ).toBeVisible();
 
   const normalizedDownload = page.waitForEvent("download");
   await page.getByRole("button", { name: "ดาวน์โหลด JSON แบบวิเคราะห์" }).click();

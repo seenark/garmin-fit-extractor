@@ -1,4 +1,5 @@
 import type { Analysis, Metric } from "../lib/api-types";
+import { ActivityCharts } from "./activity-charts";
 import {
   formatCalories,
   formatCadence,
@@ -52,6 +53,8 @@ export function AnalysisSummary({ analysis }: { analysis: Analysis }) {
           value={formatCalories(analysis.summary.calories.value)}
         />
       </dl>
+
+      <ActivityCharts analysis={analysis} />
 
       <h3>อัตราการเต้นหัวใจ</h3>
       <dl className="grid">
