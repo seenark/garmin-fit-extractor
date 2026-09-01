@@ -640,6 +640,24 @@ async fn serves_index_for_non_api_client_routes() {
     std::fs::write(static_dir.join("index.html"), "<main>FIT app</main>").expect("index file");
     let app = test_app_with_static(static_dir).await;
 
+    let root_response = app
+        .clone()
+        .oneshot(
+            Request::get("/")
+                .body(Body::empty())
+                .expect("root SPA request"),
+        )
+        .await
+        .expect("root response");
+    assert_eq!(root_response.status(), StatusCode::OK);
+    assert_eq!(
+        root_response
+            .headers()
+            .get(header::CACHE_CONTROL)
+            .and_then(|value| value.to_str().ok()),
+        Some("no-cache"),
+    );
+
     let response = app
         .oneshot(
             Request::get("/history")

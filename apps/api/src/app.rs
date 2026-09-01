@@ -22,15 +22,15 @@ pub struct AppState {
 }
 
 pub fn router(state: AppState, static_dir: PathBuf) -> Router {
-    let index = SetResponseHeader::overriding(
-        ServeFile::new(static_dir.join("index.html")),
+    let static_files = SetResponseHeader::overriding(
+        ServeDir::new(static_dir.clone()).fallback(ServeFile::new(static_dir.join("index.html"))),
         header::CACHE_CONTROL,
         HeaderValue::from_static("no-cache"),
     );
     Router::new()
         .merge(routes::router())
         .route("/healthz", get(health))
-        .fallback_service(ServeDir::new(static_dir).fallback(index))
+        .fallback_service(static_files)
         .layer(TraceLayer::new_for_http())
         .with_state(state)
 }
