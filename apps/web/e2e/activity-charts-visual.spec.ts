@@ -94,6 +94,16 @@ test("renders every activity chart without responsive overflow", async ({ page }
   await expect(page.getByRole("img", { name: "กราฟอัตราการเต้นหัวใจต่อรอบ" })).toBeVisible();
   await expect(page.getByRole("img", { name: "กราฟสมดุลระดับความสูง" })).toBeVisible();
 
+  const chartSection = page.getByTestId("activity-charts");
+  const summaryHeading = page.getByRole("heading", { name: "สรุป", exact: true });
+  const chartBox = await chartSection.boundingBox();
+  const summaryBox = await summaryHeading.boundingBox();
+  expect(chartBox).not.toBeNull();
+  expect(summaryBox).not.toBeNull();
+  expect(chartBox!.y, "charts must appear before the summary").toBeLessThan(
+    summaryBox!.y,
+  );
+
   for (const width of [320, 375, 414, 768, 1280]) {
     await page.setViewportSize({ width, height: 900 });
     await expect(page.getByTestId("activity-chart-grid")).toBeVisible();

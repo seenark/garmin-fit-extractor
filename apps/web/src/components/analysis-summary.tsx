@@ -43,6 +43,8 @@ export function AnalysisSummary({ analysis }: { analysis: Analysis }) {
         {analysis.source.fileName} · {formatDate(analysis.activity.date)}
       </p>
 
+      <ActivityCharts analysis={analysis} />
+
       <h3>สรุป</h3>
       <dl className="grid">
         <MetricCard label="ระยะเวลา" metric={analysis.summary.duration} />
@@ -53,8 +55,6 @@ export function AnalysisSummary({ analysis }: { analysis: Analysis }) {
           value={formatCalories(analysis.summary.calories.value)}
         />
       </dl>
-
-      <ActivityCharts analysis={analysis} />
 
       <h3>อัตราการเต้นหัวใจ</h3>
       <dl className="grid">
