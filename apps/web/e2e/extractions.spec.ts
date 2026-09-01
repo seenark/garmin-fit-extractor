@@ -14,8 +14,16 @@ test("authenticates, uploads ZIP members, copies raw JSON, and isolates history"
 
   await page.goto("/");
   await expect(
-    page.getByRole("button", { name: "เข้าสู่ระบบด้วย Google" }),
+    page.getByRole("heading", {
+      name: "ข้อมูลที่ Garmin บันทึกไว้ ยังดูได้ละเอียดกว่านี้",
+    }),
   ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "เข้าสู่ระบบ", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "เข้าสู่ระบบด้วย Google" }),
+  ).toHaveCount(0);
   await page.goto("/history");
   await expect(
     page.getByRole("button", { name: "เข้าสู่ระบบด้วย Google" }),

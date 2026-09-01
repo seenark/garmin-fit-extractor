@@ -1,4 +1,10 @@
-import { Link, Outlet, createRootRoute, useRouter } from "@tanstack/react-router";
+import {
+  Link,
+  Outlet,
+  createRootRoute,
+  useRouter,
+  useRouterState,
+} from "@tanstack/react-router";
 import { useState } from "react";
 import { ApiError, getCurrentUser, logout, startGoogleLogin } from "../lib/api";
 import { formatApiError } from "../lib/copy";
@@ -65,9 +71,13 @@ function RootLayout() {
   const user = Route.useLoaderData().user;
   const search = Route.useSearch();
   const router = useRouter();
+  const pathname = useRouterState({
+    select: (state) => state.location.pathname,
+  });
   const [busy, setBusy] = useState(false);
+  const isPublicHome = pathname === "/" && search.authError !== "AUTH_FAILED";
 
-  if (!user) {
+  if (!user && !isPublicHome) {
     return <SignInScreen authError={search.authError === "AUTH_FAILED"} />;
   }
 
@@ -94,24 +104,36 @@ function RootLayout() {
           </Link>
         </nav>
         <div className="account-area">
-          <span className="account-name">{user.displayName ?? user.email}</span>
-          <button
-            className="quiet"
-            type="button"
-            disabled={busy}
-            aria-busy={busy}
-            onClick={async () => {
-              setBusy(true);
-              try {
-                await logout();
-                await router.invalidate();
-              } finally {
-                setBusy(false);
-              }
-            }}
-          >
-            ออกจากระบบ
-          </button>
+          {user ? (
+            <>
+              <span className="account-name">{user.displayName ?? user.email}</span>
+              <button
+                className="quiet"
+                type="button"
+                disabled={busy}
+                aria-busy={busy}
+                onClick={async () => {
+                  setBusy(true);
+                  try {
+                    await logout();
+                    await router.invalidate();
+                  } finally {
+                    setBusy(false);
+                  }
+                }}
+              >
+                ออกจากระบบ
+              </button>
+            </>
+          ) : (
+            <button
+              className="button secondary"
+              type="button"
+              onClick={startGoogleLogin}
+            >
+              เข้าสู่ระบบ
+            </button>
+          )}
         </div>
       </header>
       <main className="page">
