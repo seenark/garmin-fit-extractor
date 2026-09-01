@@ -9,6 +9,7 @@ import {
   formatHeartRate,
   formatMetric,
   formatPace,
+  formatPaceTick,
   formatPower,
   formatPowerRange,
   formatTemperature,
@@ -19,6 +20,12 @@ describe("human-readable formatters", () => {
     expect(formatDuration(312)).toBe("5 นาที 12 วินาที");
     expect(formatDuration(3_661)).toBe("1 ชั่วโมง 1 นาที 1 วินาที");
     expect(formatPace(312)).toBe("5:12 นาทีต่อกิโลเมตร");
+  });
+
+  test("formats pace chart ticks as minutes per kilometer", () => {
+    expect(formatPaceTick(312)).toBe("5:12");
+    expect(formatPaceTick(360)).toBe("6:00");
+    expect(formatPaceTick(null)).toBe("—");
   });
 
   test("expands common activity units", () => {

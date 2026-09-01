@@ -66,13 +66,20 @@ export function formatDuration(value: number | null): string {
   return parts.join(" ");
 }
 
-export function formatPace(value: number | null): string {
-  if (!isFiniteNumber(value)) return "ไม่มีข้อมูล";
-
+function paceClock(value: number): string {
   const totalSeconds = Math.max(0, Math.round(value));
   const minutes = Math.floor(totalSeconds / 60);
   const seconds = String(totalSeconds % 60).padStart(2, "0");
-  return `${minutes}:${seconds} นาทีต่อกิโลเมตร`;
+  return `${minutes}:${seconds}`;
+}
+
+export function formatPace(value: number | null): string {
+  if (!isFiniteNumber(value)) return "ไม่มีข้อมูล";
+  return `${paceClock(value)} นาทีต่อกิโลเมตร`;
+}
+
+export function formatPaceTick(value: number | null): string {
+  return isFiniteNumber(value) ? paceClock(value) : "—";
 }
 
 export function formatMetric(metric: Metric): string {

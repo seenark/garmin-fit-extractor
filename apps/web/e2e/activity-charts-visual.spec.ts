@@ -123,6 +123,10 @@ test("renders every activity chart without responsive overflow", async ({ page }
   await expect(page.getByTestId("activity-chart-heart-rate")).toBeVisible();
   await expect(page.getByTestId("activity-chart-elevation")).toBeVisible();
   await expect(page.getByRole("img", { name: "กราฟเพซต่อรอบ" })).toBeVisible();
+  await expect(page.getByText("เพซ (นาที/กม.)", { exact: true })).toBeVisible();
+  await expect(
+    page.getByText("เพซ (วินาทีต่อกิโลเมตร)", { exact: true }),
+  ).toHaveCount(0);
   await expect(page.getByRole("img", { name: "กราฟเวลาใน Heart-rate zone" })).toBeVisible();
   await expect(page.getByRole("img", { name: "กราฟเวลาใน Power zone" })).toBeVisible();
   await expect(page.getByRole("img", { name: "กราฟกำลังตลอดกิจกรรม" })).toBeVisible();

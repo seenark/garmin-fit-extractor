@@ -28,6 +28,7 @@ import {
   formatPower,
   formatPowerRange,
   formatPace,
+  formatPaceTick,
 } from "../lib/formatters";
 
 const chartTheme = {
@@ -162,7 +163,10 @@ function createLapPaceDefinition(data: readonly LapPaceDatum[]) {
         scale: () => scalePoint<number>().padding(0.2),
       },
       y: {
-        axis: { label: "เพซ (วินาทีต่อกิโลเมตร)" },
+        axis: {
+          label: "เพซ (นาที/กม.)",
+          ticks: { format: (value) => formatPaceTick(Number(value)) },
+        },
         grid: true,
         nice: true,
         reverse: true,
@@ -479,7 +483,7 @@ function LapPaceChart({ data }: { data: readonly LapPaceDatum[] }) {
     >
       <ChartHost>
         <Chart
-          ariaDescription="แกนแนวนอนคือรอบ แกนตั้งคือวินาทีต่อกิโลเมตร และแกนถูกกลับด้านเพื่อให้เพซที่เร็วกว่าอยู่ด้านบน"
+          ariaDescription="แกนแนวนอนคือรอบ แกนตั้งคือเพซในรูปแบบนาทีต่อกิโลเมตร และแกนถูกกลับด้านเพื่อให้เพซที่เร็วกว่าอยู่ด้านบน"
           ariaLabel="กราฟเพซต่อรอบ"
           className="activity-chart"
           definition={definition}

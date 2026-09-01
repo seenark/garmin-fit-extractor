@@ -71,6 +71,40 @@ const decoded = {
   ],
 };
 
+test("uses Garmin time-in-zone messages for zone durations and boundaries", () => {
+  const result = normalizeFitMessages(
+    {
+      sessionMesgs: [],
+      timeInZoneMesgs: [
+        {
+          referenceMesg: "session",
+          referenceIndex: 0,
+          timeInHrZone: [10, 20, 30],
+          hrZoneHighBoundary: [119, 139],
+          timeInPowerZone: [5, 15, 25],
+          powerZoneHighBoundary: [150, 220, 300],
+        },
+      ],
+      hrZoneMesgs: [],
+      powerZoneMesgs: [],
+      lapMesgs: [],
+      recordMesgs: [],
+    },
+    "activity.fit",
+  );
+
+  assert.deepEqual(result.heartRate.zones, [
+    { zone: 1, minBpm: null, maxBpm: 119, durationSeconds: 10 },
+    { zone: 2, minBpm: 120, maxBpm: 139, durationSeconds: 20 },
+    { zone: 3, minBpm: 140, maxBpm: null, durationSeconds: 30 },
+  ]);
+  assert.deepEqual(result.power.zones, [
+    { zone: 1, minWatts: 0, maxWatts: 150, durationSeconds: 5 },
+    { zone: 2, minWatts: 151, maxWatts: 220, durationSeconds: 15 },
+    { zone: 3, minWatts: 221, maxWatts: 300, durationSeconds: 25 },
+  ]);
+});
+
 test("normalizes decoded FIT messages into the stable schema", () => {
   const result = normalizeFitMessages(decoded, "activity.fit");
 

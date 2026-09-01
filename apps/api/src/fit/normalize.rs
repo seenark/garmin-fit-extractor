@@ -15,6 +15,7 @@ pub fn normalize(records: &[RawFitRecord], file_name: &str) -> Analysis {
     let samples = matching_records(records, "record");
     let zones = matching_records(records, "hrzone");
     let power_zone_messages = matching_records(records, "powerzone");
+    let time_in_zone_messages = matching_records(records, "timeInZone");
     let zones_target = first_record(records, "zonestarget");
 
     let distance = session.number(&["totalDistance"]);
@@ -35,7 +36,13 @@ pub fn normalize(records: &[RawFitRecord], file_name: &str) -> Analysis {
 
     let average_cadence = normalize_cadence(session.number(&["avgRunningCadence", "avgCadence"]));
     let maximum_cadence = normalize_cadence(session.number(&["maxRunningCadence", "maxCadence"]));
-    let normalized_power_zones = power_zones(session, zones_target, &power_zone_messages, &laps);
+    let normalized_power_zones = power_zones(
+        session,
+        zones_target,
+        &power_zone_messages,
+        &laps,
+        &time_in_zone_messages,
+    );
     let normalized_samples = activity_samples(session, &samples);
     let mut analysis = Analysis {
         schema_version: Analysis::SCHEMA_VERSION.into(),
@@ -66,7 +73,7 @@ pub fn normalize(records: &[RawFitRecord], file_name: &str) -> Analysis {
         heart_rate: HeartRate {
             average_bpm: integer(session.number(&["avgHeartRate"])),
             maximum_bpm: integer(session.number(&["maxHeartRate"])),
-            zones: heart_rate_zones(session, zones),
+            zones: heart_rate_zones(session, zones, &time_in_zone_messages),
         },
         pace: Pace {
             average: metric(
@@ -202,6 +209,30 @@ fn matching_records<'a>(records: &'a [RawFitRecord], kind: &str) -> Vec<Record<'
         .collect()
 }
 
+fn first_reference_record<'a>(records: &[Record<'a>], reference: &str) -> Record<'a> {
+    records
+        .iter()
+        .copied()
+        .find(|record| {
+            record
+                .string(&["referenceMesg"])
+                .is_some_and(|value| canonical(&value) == canonical(reference))
+        })
+        .unwrap_or(Record::EMPTY)
+}
+
+fn matching_reference_records<'a>(records: &[Record<'a>], reference: &str) -> Vec<Record<'a>> {
+    records
+        .iter()
+        .copied()
+        .filter(|record| {
+            record
+                .string(&["referenceMesg"])
+                .is_some_and(|value| canonical(&value) == canonical(reference))
+        })
+        .collect()
+}
+
 fn canonical(value: &str) -> String {
     value
         .chars()
@@ -276,8 +307,17 @@ fn power_zones(
     zones_target: Record<'_>,
     zone_messages: &[Record<'_>],
     laps: &[Record<'_>],
+    time_in_zone_messages: &[Record<'_>],
 ) -> Vec<PowerZone> {
+    let session_time_in_zone = first_reference_record(time_in_zone_messages, "session");
     let mut durations = session.numbers(&["timeInPowerZone"]);
+    if durations.is_empty() {
+        durations = session_time_in_zone.numbers(&["timeInPowerZone"]);
+    }
+    if durations.is_empty() {
+        let lap_time_in_zone = matching_reference_records(time_in_zone_messages, "lap");
+        durations = aggregate_zone_durations(&lap_time_in_zone, &["timeInPowerZone"]);
+    }
     if durations.is_empty() {
         durations = aggregate_zone_durations(laps, &["timeInPowerZone"]);
     }
@@ -298,6 +338,13 @@ fn power_zones(
         .collect();
     if boundaries.is_empty() {
         boundaries = zones_target
+            .numbers(&["powerZoneHighBoundary"])
+            .into_iter()
+            .map(|value| value.and_then(|value| integer(Some(value))))
+            .collect();
+    }
+    if boundaries.is_empty() {
+        boundaries = session_time_in_zone
             .numbers(&["powerZoneHighBoundary"])
             .into_iter()
             .map(|value| value.and_then(|value| integer(Some(value))))
@@ -377,27 +424,38 @@ fn activity_samples(session: Record<'_>, records: &[Record<'_>]) -> Vec<Activity
         .collect()
 }
 
-fn heart_rate_zones(session: Record<'_>, mut zones: Vec<Record<'_>>) -> Vec<HeartRateZone> {
-    let durations: Vec<Option<f64>> = session
-        .value(&["timeInHrZone"])
-        .and_then(Value::as_array)
-        .map(|values| {
-            values
-                .iter()
-                .map(|value| Value::as_f64(value).filter(|value| value.is_finite()))
-                .collect()
-        })
-        .unwrap_or_default();
+fn heart_rate_zones(
+    session: Record<'_>,
+    mut zones: Vec<Record<'_>>,
+    time_in_zone_messages: &[Record<'_>],
+) -> Vec<HeartRateZone> {
+    let session_time_in_zone = first_reference_record(time_in_zone_messages, "session");
+    let mut durations = session.numbers(&["timeInHrZone"]);
+    if durations.is_empty() {
+        durations = session_time_in_zone.numbers(&["timeInHrZone"]);
+    }
+    if durations.is_empty() {
+        let lap_time_in_zone = matching_reference_records(time_in_zone_messages, "lap");
+        durations = aggregate_zone_durations(&lap_time_in_zone, &["timeInHrZone"]);
+    }
+
+    let boundaries = session_time_in_zone.numbers(&["hrZoneHighBoundary"]);
     zones.sort_by(|left, right| {
         left.number(&["messageIndex"])
             .unwrap_or(0.0)
             .total_cmp(&right.number(&["messageIndex"]).unwrap_or(0.0))
     });
 
-    let count = durations.len().max(zones.len());
+    let count = durations.len().max(zones.len()).max(boundaries.len());
     (0..count)
         .map(|index| {
             let zone = zones.get(index).copied().unwrap_or(Record::EMPTY);
+            let previous_boundary = boundaries
+                .get(index.checked_sub(1).unwrap_or(usize::MAX))
+                .copied()
+                .flatten()
+                .and_then(|value| integer(Some(value)))
+                .and_then(|value| value.checked_add(1));
             let next_minimum = zones
                 .get(index + 1)
                 .copied()
@@ -407,13 +465,21 @@ fn heart_rate_zones(session: Record<'_>, mut zones: Vec<Record<'_>>) -> Vec<Hear
             let direct_maximum = zone
                 .number(&["highBpm", "maxHeartRate"])
                 .and_then(|value| integer(Some(value)));
+            let boundary_maximum = boundaries
+                .get(index)
+                .copied()
+                .flatten()
+                .and_then(|value| integer(Some(value)));
 
             HeartRateZone {
                 zone: index as u32 + 1,
                 min_bpm: zone
                     .number(&["lowBpm", "minHeartRate"])
-                    .and_then(|value| integer(Some(value))),
-                max_bpm: direct_maximum.or_else(|| next_minimum.map(|value| value - 1)),
+                    .and_then(|value| integer(Some(value)))
+                    .or(previous_boundary),
+                max_bpm: direct_maximum
+                    .or(boundary_maximum)
+                    .or_else(|| next_minimum.map(|value| value - 1)),
                 duration_seconds: round(durations.get(index).copied().flatten(), 2),
             }
         })
@@ -743,6 +809,42 @@ mod tests {
         assert_eq!(result.samples[1].heart_rate_bpm, Some(145));
         assert_eq!(result.samples[1].power_watts, Some(245));
         assert_eq!(result.laps[0].pace.value, Some(360.0));
+    }
+
+    #[test]
+    fn normalization_uses_garmin_time_in_zone_records() {
+        let result = normalize(
+            &[record(
+                "time_in_zone",
+                [
+                    ("reference_mesg", json!("session")),
+                    ("reference_index", json!(0)),
+                    ("time_in_hr_zone", json!([10, 20, 30])),
+                    ("hr_zone_high_boundary", json!([119, 139])),
+                    ("time_in_power_zone", json!([5, 15, 25])),
+                    ("power_zone_high_boundary", json!([150, 220, 300])),
+                ],
+            )],
+            "activity.fit",
+        );
+
+        assert_eq!(result.heart_rate.zones.len(), 3);
+        assert_eq!(result.heart_rate.zones[0].min_bpm, None);
+        assert_eq!(result.heart_rate.zones[0].max_bpm, Some(119));
+        assert_eq!(result.heart_rate.zones[1].min_bpm, Some(120));
+        assert_eq!(result.heart_rate.zones[1].max_bpm, Some(139));
+        assert_eq!(result.heart_rate.zones[2].min_bpm, Some(140));
+        assert_eq!(result.heart_rate.zones[2].max_bpm, None);
+        assert_eq!(result.heart_rate.zones[1].duration_seconds, Some(20.0));
+
+        assert_eq!(result.power.zones.len(), 3);
+        assert_eq!(result.power.zones[0].min_watts, Some(0));
+        assert_eq!(result.power.zones[0].max_watts, Some(150));
+        assert_eq!(result.power.zones[1].min_watts, Some(151));
+        assert_eq!(result.power.zones[1].max_watts, Some(220));
+        assert_eq!(result.power.zones[2].min_watts, Some(221));
+        assert_eq!(result.power.zones[2].max_watts, Some(300));
+        assert_eq!(result.power.zones[2].duration_seconds, Some(25.0));
     }
 
     #[test]

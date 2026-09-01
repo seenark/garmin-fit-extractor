@@ -650,6 +650,13 @@ async fn serves_index_for_non_api_client_routes() {
         .expect("response");
     assert_eq!(response.status(), StatusCode::OK);
     assert_eq!(
+        response
+            .headers()
+            .get(header::CACHE_CONTROL)
+            .and_then(|value| value.to_str().ok()),
+        Some("no-cache"),
+    );
+    assert_eq!(
         to_bytes(response.into_body(), usize::MAX)
             .await
             .expect("SPA body"),

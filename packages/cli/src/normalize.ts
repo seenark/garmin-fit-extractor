@@ -48,6 +48,12 @@ const firstString = (message: FitMessage, keys: string[]): string | null => {
   return null;
 };
 
+const firstReferenceMessage = (messages: FitMessage[], reference: string): FitMessage =>
+  messages.find((message) => firstString(message, ["referenceMesg"]) === reference) ?? {};
+
+const matchingReferenceMessages = (messages: FitMessage[], reference: string): FitMessage[] =>
+  messages.filter((message) => firstString(message, ["referenceMesg"]) === reference);
+
 const speedToPace = (speedMetersPerSecond: number | null): number | null => {
   if (speedMetersPerSecond === null || speedMetersPerSecond <= 0) return null;
   return round(1000 / speedMetersPerSecond, 2);
@@ -88,29 +94,48 @@ const normalizeCadence = (value: number | null): number | null => {
   return value < 130 ? value * 2 : value;
 };
 
-const heartRateZones = (session: FitMessage, zoneMessages: FitMessage[]) => {
-  const durations = Array.isArray(session.timeInHrZone)
-    ? session.timeInHrZone.map(numberOrNull)
-    : [];
+const heartRateZones = (
+  session: FitMessage,
+  zoneMessages: FitMessage[],
+  timeInZoneMessages: FitMessage[],
+) => {
+  const sessionTimeInZone = firstReferenceMessage(timeInZoneMessages, "session");
+  let durations = Array.isArray(session.timeInHrZone) ? session.timeInHrZone.map(numberOrNull) : [];
+  if (durations.length === 0 && Array.isArray(sessionTimeInZone.timeInHrZone)) {
+    durations = sessionTimeInZone.timeInHrZone.map(numberOrNull);
+  }
+  if (durations.length === 0) {
+    durations = aggregateZoneDurations(
+      matchingReferenceMessages(timeInZoneMessages, "lap"),
+      "timeInHrZone",
+    );
+  }
 
+  const boundaries = Array.isArray(sessionTimeInZone.hrZoneHighBoundary)
+    ? sessionTimeInZone.hrZoneHighBoundary.map(integerOrNull)
+    : [];
   const sortedZones = [...zoneMessages].sort((a, b) => {
     const aIndex = firstNumber(a, ["messageIndex"]) ?? 0;
     const bIndex = firstNumber(b, ["messageIndex"]) ?? 0;
     return aIndex - bIndex;
   });
 
-  const count = Math.max(durations.length, sortedZones.length);
+  const count = Math.max(durations.length, sortedZones.length, boundaries.length);
   return Array.from({ length: count }, (_, index) => {
     const zone = sortedZones[index] ?? {};
-    const minBpm = integerOrNull(zone.lowBpm ?? zone.minHeartRate);
+    const previousBoundary = integerOrNull(boundaries[index - 1]);
+    const minBpm =
+      integerOrNull(zone.lowBpm ?? zone.minHeartRate) ??
+      (previousBoundary === null ? null : previousBoundary + 1);
     const next = sortedZones[index + 1];
     const nextMin = next ? integerOrNull(next.lowBpm ?? next.minHeartRate) : null;
     const directMax = integerOrNull(zone.highBpm ?? zone.maxHeartRate);
+    const boundaryMax = integerOrNull(boundaries[index]);
 
     return {
       zone: index + 1,
       minBpm,
-      maxBpm: directMax ?? (nextMin === null ? null : nextMin - 1),
+      maxBpm: directMax ?? boundaryMax ?? (nextMin === null ? null : nextMin - 1),
       durationSeconds: round(durations[index] ?? null, 2),
     };
   });
@@ -138,10 +163,21 @@ const powerZones = (
   zoneMessages: FitMessage[],
   zonesTarget: FitMessage,
   laps: FitMessage[],
+  timeInZoneMessages: FitMessage[],
 ) => {
+  const sessionTimeInZone = firstReferenceMessage(timeInZoneMessages, "session");
   let durations = Array.isArray(session.timeInPowerZone)
     ? session.timeInPowerZone.map(numberOrNull)
     : [];
+  if (durations.length === 0 && Array.isArray(sessionTimeInZone.timeInPowerZone)) {
+    durations = sessionTimeInZone.timeInPowerZone.map(numberOrNull);
+  }
+  if (durations.length === 0) {
+    durations = aggregateZoneDurations(
+      matchingReferenceMessages(timeInZoneMessages, "lap"),
+      "timeInPowerZone",
+    );
+  }
   if (durations.length === 0) durations = aggregateZoneDurations(laps, "timeInPowerZone");
 
   const sortedZones = [...zoneMessages].sort((a, b) => {
@@ -152,6 +188,9 @@ const powerZones = (
   let boundaries = sortedZones.map((zone) => integerOrNull(zone.highValue));
   if (boundaries.length === 0 && Array.isArray(zonesTarget.powerZoneHighBoundary)) {
     boundaries = zonesTarget.powerZoneHighBoundary.map(integerOrNull);
+  }
+  if (boundaries.length === 0 && Array.isArray(sessionTimeInZone.powerZoneHighBoundary)) {
+    boundaries = sessionTimeInZone.powerZoneHighBoundary.map(integerOrNull);
   }
 
   const count = Math.max(durations.length, boundaries.length);
@@ -208,6 +247,7 @@ export function normalizeFitMessages(input: FitMessages, fileName: string): Anal
   const records = messages(input, "recordMesgs");
   const zones = messages(input, "hrZoneMesgs");
   const powerZoneMessages = messages(input, "powerZoneMesgs");
+  const timeInZoneMessages = messages(input, "timeInZoneMesgs");
   const zonesTarget = messages(input, "zonesTargetMesgs")[0] ?? {};
 
   const distance = firstNumber(session, ["totalDistance"]);
@@ -247,7 +287,7 @@ export function normalizeFitMessages(input: FitMessages, fileName: string): Anal
     heartRate: {
       averageBpm: integerOrNull(session.avgHeartRate),
       maximumBpm: integerOrNull(session.maxHeartRate),
-      zones: heartRateZones(session, zones),
+      zones: heartRateZones(session, zones, timeInZoneMessages),
     },
     pace: {
       average: {
@@ -266,7 +306,7 @@ export function normalizeFitMessages(input: FitMessages, fileName: string): Anal
     power: {
       averageWatts: integerOrNull(session.avgPower),
       maximumWatts: integerOrNull(session.maxPower),
-      zones: powerZones(session, powerZoneMessages, zonesTarget, laps),
+      zones: powerZones(session, powerZoneMessages, zonesTarget, laps, timeInZoneMessages),
     },
     runningDynamics: {
       cadence: {
