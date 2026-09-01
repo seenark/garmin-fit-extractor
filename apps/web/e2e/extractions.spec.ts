@@ -69,6 +69,24 @@ test("authenticates, uploads ZIP members, copies raw JSON, and isolates history"
     page.getByRole("img", { name: "กราฟเพซต่อรอบ" }),
   ).toBeVisible();
 
+  const copyActions = page.getByTestId("json-copy-actions");
+  const tablist = page.getByRole("tablist", { name: "มุมมองข้อมูล" });
+  await expect(copyActions).toBeVisible();
+  await expect(page.getByTestId("copy-normalized-json")).toBeVisible();
+  await expect(page.getByTestId("copy-raw-json")).toBeVisible();
+  const copyActionsBox = await copyActions.boundingBox();
+  const tablistBox = await tablist.boundingBox();
+  expect(copyActionsBox).not.toBeNull();
+  expect(tablistBox).not.toBeNull();
+  expect(copyActionsBox!.y + copyActionsBox!.height).toBeLessThanOrEqual(
+    tablistBox!.y,
+  );
+
+  await page.getByTestId("copy-normalized-json").click();
+  await expect(page.getByTestId("copy-normalized-json")).toHaveText("คัดลอกแล้ว");
+  const copiedNormalized = await page.evaluate(() => navigator.clipboard.readText());
+  expect(JSON.parse(copiedNormalized)).toMatchObject({ schemaVersion: "1.0.0" });
+
   const normalizedDownload = page.waitForEvent("download");
   await page.getByRole("button", { name: "ดาวน์โหลด JSON แบบวิเคราะห์" }).click();
   const normalizedPath = await (await normalizedDownload).path();

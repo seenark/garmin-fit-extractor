@@ -2,6 +2,7 @@ import { Link, createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 
 import { AnalysisSummary } from "../components/analysis-summary";
+import { JsonCopyActions } from "../components/json-copy-actions";
 import { RawJsonView } from "../components/raw-json-view";
 import { ApiError, downloadExtraction, getExtraction } from "../lib/api";
 import { formatApiError } from "../lib/copy";
@@ -89,6 +90,7 @@ function ExtractionDetailPage() {
           {error}
         </div>
       ) : null}
+      <JsonCopyActions normalized={detail.normalized!} raw={detail.raw!} />
       <div className="tabs" role="tablist" aria-label="มุมมองข้อมูล">
         <button
           type="button"

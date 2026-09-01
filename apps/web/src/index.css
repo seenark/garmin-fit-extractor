@@ -859,6 +859,19 @@ tbody tr:hover td {
   width: 100%;
 }
 
+.json-copy-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+  margin-top: var(--space-lg);
+}
+
+.json-copy-actions [aria-live="polite"] {
+  color: var(--color-muted);
+  font-size: var(--text-sm);
+}
+
 .tabs {
   border-bottom: var(--rule-thin) solid var(--color-rule);
   display: flex;
@@ -1261,6 +1274,15 @@ pre {
   .upload-actions {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .json-copy-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .json-copy-actions button {
+    width: 100%;
   }
 
   .upload-actions .button,
