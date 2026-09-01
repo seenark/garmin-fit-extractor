@@ -16,6 +16,23 @@ fn analysis_serializes_required_nulls_and_fixed_units() {
 }
 
 #[test]
+fn analysis_accepts_pre_chart_normalized_json_with_missing_chart_fields() {
+    let mut json =
+        serde_json::to_value(Analysis::empty("activity.fit")).expect("analysis must serialize");
+    json.as_object_mut()
+        .expect("analysis object")
+        .remove("samples");
+    json["power"]
+        .as_object_mut()
+        .expect("power object")
+        .remove("zones");
+
+    let parsed: Analysis = serde_json::from_value(json).expect("legacy analysis must parse");
+    assert!(parsed.samples.is_empty());
+    assert!(parsed.power.zones.is_empty());
+}
+
+#[test]
 fn analysis_rejects_an_incompatible_schema_version() {
     let value = serde_json::json!({
         "schemaVersion": "2.0.0",

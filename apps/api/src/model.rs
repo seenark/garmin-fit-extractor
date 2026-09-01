@@ -61,6 +61,15 @@ pub struct HeartRateZone {
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct PowerZone {
+    pub zone: u32,
+    pub min_watts: Option<i64>,
+    pub max_watts: Option<i64>,
+    pub duration_seconds: Option<f64>,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct HeartRate {
     pub average_bpm: Option<i64>,
     pub maximum_bpm: Option<i64>,
@@ -78,6 +87,15 @@ pub struct Pace {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Power {
+    pub average_watts: Option<i64>,
+    pub maximum_watts: Option<i64>,
+    #[serde(default)]
+    pub zones: Vec<PowerZone>,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LapPower {
     pub average_watts: Option<i64>,
     pub maximum_watts: Option<i64>,
 }
@@ -116,6 +134,16 @@ pub struct Temperature {
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct ActivitySample {
+    pub index: u32,
+    pub timestamp: Option<String>,
+    pub elapsed_seconds: Option<f64>,
+    pub heart_rate_bpm: Option<i64>,
+    pub power_watts: Option<i64>,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct LapHeartRate {
     pub average_bpm: Option<i64>,
     pub maximum_bpm: Option<i64>,
@@ -131,7 +159,7 @@ pub struct Lap {
     pub moving_time: Metric,
     pub pace: Metric,
     pub heart_rate: LapHeartRate,
-    pub power: Power,
+    pub power: LapPower,
     pub cadence: Cadence,
 }
 
@@ -148,6 +176,8 @@ pub struct Analysis {
     pub running_dynamics: RunningDynamics,
     pub elevation: Elevation,
     pub temperature: Temperature,
+    #[serde(default)]
+    pub samples: Vec<ActivitySample>,
     pub laps: Vec<Lap>,
 }
 
@@ -187,6 +217,7 @@ impl Analysis {
             power: Power {
                 average_watts: None,
                 maximum_watts: None,
+                zones: Vec::new(),
             },
             running_dynamics: RunningDynamics {
                 cadence: Cadence {
@@ -207,6 +238,7 @@ impl Analysis {
                 minimum_celsius: None,
                 maximum_celsius: None,
             },
+            samples: Vec::new(),
             laps: Vec::new(),
         }
     }
@@ -259,6 +291,8 @@ impl<'de> Deserialize<'de> for Analysis {
             running_dynamics: RunningDynamics,
             elevation: Elevation,
             temperature: Temperature,
+            #[serde(default)]
+            samples: Vec<ActivitySample>,
             laps: Vec<Lap>,
         }
 
@@ -274,6 +308,7 @@ impl<'de> Deserialize<'de> for Analysis {
             running_dynamics: wire.running_dynamics,
             elevation: wire.elevation,
             temperature: wire.temperature,
+            samples: wire.samples,
             laps: wire.laps,
         };
         analysis.validate().map_err(serde::de::Error::custom)?;

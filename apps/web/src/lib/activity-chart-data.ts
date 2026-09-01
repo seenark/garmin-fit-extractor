@@ -1,4 +1,10 @@
-import type { Analysis, HeartRateZone, Metric } from "./api-types";
+import type {
+  ActivitySample,
+  Analysis,
+  HeartRateZone,
+  Metric,
+  PowerZone,
+} from "./api-types";
 
 type Lap = Analysis["laps"][number];
 
@@ -12,6 +18,24 @@ export interface HeartRateZoneDatum {
   durationSeconds: number;
   minBpm: number | null;
   maxBpm: number | null;
+}
+
+export interface PowerZoneDatum {
+  zone: number;
+  durationSeconds: number;
+  minWatts: number | null;
+  maxWatts: number | null;
+}
+
+export interface PowerDatum {
+  seconds: number;
+  watts: number;
+}
+
+export interface LapPowerDatum {
+  lap: number;
+  averageWatts: number | null;
+  maximumWatts: number | null;
 }
 
 export interface LapHeartRateDatum {
@@ -41,6 +65,10 @@ function finiteOptional(value: number | null): number | null {
   return isFiniteNumber(value) && value > 0 ? value : null;
 }
 
+function nonnegativeOptional(value: number | null): number | null {
+  return isFiniteNumber(value) && value >= 0 ? value : null;
+}
+
 export function buildLapPaceData(laps: Lap[]): LapPaceDatum[] {
   return laps.flatMap((lap) => {
     const paceSecondsPerKm = positiveMetricValue(lap.pace);
@@ -63,6 +91,40 @@ export function buildHeartRateZoneData(
         maxBpm: zone.maxBpm,
       },
     ];
+  });
+}
+
+export function buildPowerZoneData(zones: PowerZone[]): PowerZoneDatum[] {
+  return zones.flatMap((zone) => {
+    if (!isFiniteNumber(zone.durationSeconds) || zone.durationSeconds < 0) {
+      return [];
+    }
+    return [
+      {
+        zone: zone.zone,
+        durationSeconds: zone.durationSeconds,
+        minWatts: zone.minWatts,
+        maxWatts: zone.maxWatts,
+      },
+    ];
+  });
+}
+
+export function buildPowerData(samples: ActivitySample[]): PowerDatum[] {
+  return samples.flatMap((sample) => {
+    const seconds = nonnegativeOptional(sample.elapsedSeconds);
+    const watts = nonnegativeOptional(sample.powerWatts);
+    return seconds === null || watts === null ? [] : [{ seconds, watts }];
+  });
+}
+
+export function buildLapPowerData(laps: Lap[]): LapPowerDatum[] {
+  return laps.flatMap((lap) => {
+    const averageWatts = nonnegativeOptional(lap.power.averageWatts);
+    const maximumWatts = nonnegativeOptional(lap.power.maximumWatts);
+    return averageWatts === null && maximumWatts === null
+      ? []
+      : [{ lap: lap.index, averageWatts, maximumWatts }];
   });
 }
 

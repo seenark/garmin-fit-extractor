@@ -15,6 +15,21 @@ export const heartRateZoneSchema = z.object({
   durationSeconds: nullableNumber,
 });
 
+export const powerZoneSchema = z.object({
+  zone: z.number().int().positive(),
+  minWatts: nullableInteger,
+  maxWatts: nullableInteger,
+  durationSeconds: nullableNumber,
+});
+
+export const activitySampleSchema = z.object({
+  index: z.number().int().nonnegative(),
+  timestamp: z.string().datetime().nullable(),
+  elapsedSeconds: nullableNumber,
+  heartRateBpm: nullableInteger,
+  powerWatts: nullableInteger,
+});
+
 export const lapSchema = z.object({
   index: z.number().int().nonnegative(),
   startTime: z.string().datetime().nullable(),
@@ -68,6 +83,7 @@ export const analysisSchema = z.object({
   power: z.object({
     averageWatts: nullableInteger,
     maximumWatts: nullableInteger,
+    zones: z.array(powerZoneSchema).default([]),
   }),
   runningDynamics: z.object({
     cadence: z.object({
@@ -88,6 +104,7 @@ export const analysisSchema = z.object({
     minimumCelsius: nullableNumber,
     maximumCelsius: nullableNumber,
   }),
+  samples: z.array(activitySampleSchema).default([]),
   laps: z.array(lapSchema),
 });
 

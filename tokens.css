@@ -20,6 +20,15 @@
   --color-accent-ink: oklch(95.78% 0.0058 264.5);
   --color-focus: oklch(55.86% 0.2255 262.1);
 
+  /* Garmin-like intensity palette: gray → blue → green → yellow → orange → red → purple */
+  --color-zone-gray: oklch(55.00% 0.0250 264.5);
+  --color-zone-blue: oklch(57.00% 0.1800 255.0);
+  --color-zone-green: oklch(62.00% 0.1700 145.0);
+  --color-zone-yellow: oklch(76.00% 0.1650 92.0);
+  --color-zone-orange: oklch(66.00% 0.1900 55.0);
+  --color-zone-red: oklch(59.00% 0.2200 25.0);
+  --color-zone-purple: oklch(58.00% 0.1800 310.0);
+
   /* Semantic status colors, tuned for readable text on soft surfaces */
   --color-success: oklch(45.00% 0.1400 140.4);
   --color-success-soft: oklch(95.00% 0.0350 140.4);

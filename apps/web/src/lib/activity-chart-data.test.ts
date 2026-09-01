@@ -5,7 +5,10 @@ import {
   buildElevationData,
   buildHeartRateZoneData,
   buildLapHeartRateData,
+  buildLapPowerData,
   buildLapPaceData,
+  buildPowerData,
+  buildPowerZoneData,
 } from "./activity-chart-data";
 
 const metric = (value: number | null, unit: string) => ({ value, unit });
@@ -34,7 +37,15 @@ const analysis: Analysis = {
     moving: metric(350, "seconds_per_kilometer"),
     best: metric(300, "seconds_per_kilometer"),
   },
-  power: { averageWatts: 250, maximumWatts: 410 },
+  power: {
+    averageWatts: 250,
+    maximumWatts: 410,
+    zones: [
+      { zone: 1, minWatts: 0, maxWatts: 150, durationSeconds: 30 },
+      { zone: 2, minWatts: 151, maxWatts: 220, durationSeconds: null },
+      { zone: 7, minWatts: 501, maxWatts: null, durationSeconds: 5 },
+    ],
+  },
   runningDynamics: {
     cadence: { averageStepsPerMinute: 176, maximumStepsPerMinute: 188 },
     strideLength: metric(1.2, "meters"),
@@ -51,6 +62,36 @@ const analysis: Analysis = {
     minimumCelsius: 15,
     maximumCelsius: 21,
   },
+  samples: [
+    {
+      index: 0,
+      timestamp: "2026-08-31T06:00:00.000Z",
+      elapsedSeconds: 0,
+      heartRateBpm: 140,
+      powerWatts: 0,
+    },
+    {
+      index: 1,
+      timestamp: "2026-08-31T06:00:01.000Z",
+      elapsedSeconds: 1,
+      heartRateBpm: 145,
+      powerWatts: 245,
+    },
+    {
+      index: 2,
+      timestamp: null,
+      elapsedSeconds: null,
+      heartRateBpm: null,
+      powerWatts: 300,
+    },
+    {
+      index: 3,
+      timestamp: "2026-08-31T06:00:03.000Z",
+      elapsedSeconds: 3,
+      heartRateBpm: null,
+      powerWatts: null,
+    },
+  ],
   laps: [
     {
       index: 1,
@@ -100,6 +141,27 @@ describe("activity chart data", () => {
     expect(buildHeartRateZoneData(analysis.heartRate.zones)).toEqual([
       { zone: 1, durationSeconds: 0, minBpm: 100, maxBpm: 119 },
       { zone: 3, durationSeconds: 900, minBpm: 140, maxBpm: 159 },
+    ]);
+  });
+
+  test("keeps power-zone thresholds and omits zones without duration", () => {
+    expect(buildPowerZoneData(analysis.power.zones)).toEqual([
+      { zone: 1, durationSeconds: 30, minWatts: 0, maxWatts: 150 },
+      { zone: 7, durationSeconds: 5, minWatts: 501, maxWatts: null },
+    ]);
+  });
+
+  test("keeps timestamped power samples including zero watts", () => {
+    expect(buildPowerData(analysis.samples)).toEqual([
+      { seconds: 0, watts: 0 },
+      { seconds: 1, watts: 245 },
+    ]);
+  });
+
+  test("builds a lap-power fallback from either valid power series", () => {
+    expect(buildLapPowerData(analysis.laps)).toEqual([
+      { lap: 1, averageWatts: 245, maximumWatts: 300 },
+      { lap: 3, averageWatts: null, maximumWatts: 320 },
     ]);
   });
 

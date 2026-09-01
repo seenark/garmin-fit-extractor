@@ -999,6 +999,32 @@ tbody tr:hover td {
   gap: var(--space-2xs);
 }
 
+.activity-chart-zone-legend {
+  align-items: flex-start;
+  column-gap: var(--space-sm);
+  row-gap: var(--space-xs);
+}
+
+.activity-chart-zone-legend li {
+  flex-wrap: wrap;
+  min-width: 5.5rem;
+}
+
+.activity-chart-zone-swatch {
+  border: var(--rule-thin) solid color-mix(in srgb, var(--color-ink) 18%, transparent);
+  border-radius: var(--radius-pill);
+  display: inline-block;
+  flex: 0 0 auto;
+  height: 0.75rem;
+  width: 0.75rem;
+}
+
+.activity-chart-zone-range {
+  color: var(--color-muted);
+  flex-basis: 100%;
+  margin-left: calc(0.75rem + var(--space-2xs));
+}
+
 .activity-chart-swatch {
   background: var(--color-accent);
   border-radius: var(--radius-pill);

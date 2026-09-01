@@ -3,8 +3,9 @@ use serde_json::Value;
 
 use crate::model::RawFitRecord;
 use crate::model::{
-    Analysis, Cadence, Calories, Elevation, HeartRate, HeartRateZone, Lap, LapHeartRate, Metric,
-    NormalizedActivity, Pace, Power, RunningDynamics, Summary, Temperature,
+    ActivitySample, Analysis, Cadence, Calories, Elevation, HeartRate, HeartRateZone, Lap,
+    LapHeartRate, LapPower, Metric, NormalizedActivity, Pace, Power, PowerZone, RunningDynamics,
+    Summary, Temperature,
 };
 
 pub fn normalize(records: &[RawFitRecord], file_name: &str) -> Analysis {
@@ -13,6 +14,8 @@ pub fn normalize(records: &[RawFitRecord], file_name: &str) -> Analysis {
     let laps = matching_records(records, "lap");
     let samples = matching_records(records, "record");
     let zones = matching_records(records, "hrzone");
+    let power_zone_messages = matching_records(records, "powerzone");
+    let zones_target = first_record(records, "zonestarget");
 
     let distance = session.number(&["totalDistance"]);
     let duration = session.number(&["totalElapsedTime"]);
@@ -32,6 +35,8 @@ pub fn normalize(records: &[RawFitRecord], file_name: &str) -> Analysis {
 
     let average_cadence = normalize_cadence(session.number(&["avgRunningCadence", "avgCadence"]));
     let maximum_cadence = normalize_cadence(session.number(&["maxRunningCadence", "maxCadence"]));
+    let normalized_power_zones = power_zones(session, zones_target, &power_zone_messages, &laps);
+    let normalized_samples = activity_samples(session, &samples);
     let mut analysis = Analysis {
         schema_version: Analysis::SCHEMA_VERSION.into(),
         source: crate::model::Source {
@@ -74,6 +79,7 @@ pub fn normalize(records: &[RawFitRecord], file_name: &str) -> Analysis {
         power: Power {
             average_watts: integer(session.number(&["avgPower"])),
             maximum_watts: integer(session.number(&["maxPower"])),
+            zones: normalized_power_zones,
         },
         running_dynamics: RunningDynamics {
             cadence: Cadence {
@@ -103,6 +109,7 @@ pub fn normalize(records: &[RawFitRecord], file_name: &str) -> Analysis {
             minimum_celsius: round(minimum_temperature, 2),
             maximum_celsius: round(maximum_temperature, 2),
         },
+        samples: normalized_samples,
         laps: Vec::new(),
     };
 
@@ -162,6 +169,18 @@ impl<'a> Record<'a> {
                 .filter(|value| !value.is_empty())
                 .map(str::to_owned)
         })
+    }
+
+    fn numbers(self, aliases: &[&str]) -> Vec<Option<f64>> {
+        self.value(aliases)
+            .and_then(Value::as_array)
+            .map(|values| {
+                values
+                    .iter()
+                    .map(|value| value.as_f64().filter(|value| value.is_finite()))
+                    .collect()
+            })
+            .unwrap_or_default()
     }
 }
 
@@ -252,6 +271,112 @@ fn max_record_value(records: &[Record<'_>], aliases: &[&str]) -> Option<f64> {
         .reduce(f64::max)
 }
 
+fn power_zones(
+    session: Record<'_>,
+    zones_target: Record<'_>,
+    zone_messages: &[Record<'_>],
+    laps: &[Record<'_>],
+) -> Vec<PowerZone> {
+    let mut durations = session.numbers(&["timeInPowerZone"]);
+    if durations.is_empty() {
+        durations = aggregate_zone_durations(laps, &["timeInPowerZone"]);
+    }
+
+    let mut sorted_zones = zone_messages.to_vec();
+    sorted_zones.sort_by(|left, right| {
+        left.number(&["messageIndex"])
+            .unwrap_or(0.0)
+            .total_cmp(&right.number(&["messageIndex"]).unwrap_or(0.0))
+    });
+
+    let mut boundaries: Vec<Option<i64>> = sorted_zones
+        .iter()
+        .map(|zone| {
+            zone.number(&["highValue"])
+                .and_then(|value| integer(Some(value)))
+        })
+        .collect();
+    if boundaries.is_empty() {
+        boundaries = zones_target
+            .numbers(&["powerZoneHighBoundary"])
+            .into_iter()
+            .map(|value| value.and_then(|value| integer(Some(value))))
+            .collect();
+    }
+
+    let count = durations.len().max(boundaries.len());
+    (0..count)
+        .map(|index| PowerZone {
+            zone: index as u32 + 1,
+            min_watts: if index == 0 {
+                Some(0)
+            } else {
+                boundaries
+                    .get(index - 1)
+                    .copied()
+                    .flatten()
+                    .and_then(|value| value.checked_add(1))
+            },
+            max_watts: boundaries.get(index).copied().flatten(),
+            duration_seconds: round(durations.get(index).copied().flatten(), 2),
+        })
+        .collect()
+}
+
+fn aggregate_zone_durations(records: &[Record<'_>], aliases: &[&str]) -> Vec<Option<f64>> {
+    let count = records
+        .iter()
+        .map(|record| record.numbers(aliases).len())
+        .max()
+        .unwrap_or(0);
+    (0..count)
+        .map(|index| {
+            let values = records
+                .iter()
+                .filter_map(|record| record.numbers(aliases).get(index).copied().flatten())
+                .collect::<Vec<_>>();
+            (!values.is_empty()).then(|| values.iter().sum())
+        })
+        .collect()
+}
+
+fn activity_samples(session: Record<'_>, records: &[Record<'_>]) -> Vec<ActivitySample> {
+    let origin = session
+        .value(&["startTime", "timestamp"])
+        .and_then(|value| parse_date(Some(value)))
+        .or_else(|| {
+            records
+                .iter()
+                .find_map(|record| parse_date(record.value(&["timestamp"])))
+        });
+
+    records
+        .iter()
+        .enumerate()
+        .filter_map(|(index, record)| {
+            let sample_date = parse_date(record.value(&["timestamp"]));
+            let timestamp = sample_date.map(format_date);
+            let elapsed_seconds = sample_date
+                .as_ref()
+                .zip(origin.as_ref())
+                .map(|(time, start)| {
+                    (*time).signed_duration_since(*start).num_milliseconds() as f64 / 1000.0
+                })
+                .filter(|value| value.is_finite() && *value >= 0.0);
+            let heart_rate_bpm = integer(record.number(&["heartRate", "hr"]));
+            let power_watts = integer(record.number(&["power", "powerWatts"]));
+
+            (heart_rate_bpm.is_some() || power_watts.is_some()).then(|| ActivitySample {
+                index: index as u32,
+                timestamp,
+                elapsed_seconds: round(elapsed_seconds, 3),
+                heart_rate_bpm,
+                power_watts,
+            })
+        })
+        .collect()
+}
+
 fn heart_rate_zones(session: Record<'_>, mut zones: Vec<Record<'_>>) -> Vec<HeartRateZone> {
     let durations: Vec<Option<f64>> = session
         .value(&["timeInHrZone"])
@@ -320,7 +445,7 @@ fn normalize_lap(lap: Record<'_>, index: u32) -> Lap {
             average_bpm: integer(lap.number(&["avgHeartRate"])),
             maximum_bpm: integer(lap.number(&["maxHeartRate"])),
         },
-        power: Power {
+        power: LapPower {
             average_watts: integer(lap.number(&["avgPower"])),
             maximum_watts: integer(lap.number(&["maxPower"])),
         },
@@ -338,9 +463,15 @@ fn normalize_lap(lap: Record<'_>, index: u32) -> Lap {
 }
 
 fn date_or_null(value: Option<&Value>) -> Option<String> {
-    DateTime::parse_from_rfc3339(value?.as_str()?)
-        .ok()
-        .map(|date| date.to_utc().to_rfc3339_opts(SecondsFormat::Millis, true))
+    parse_date(value).map(format_date)
+}
+
+fn parse_date(value: Option<&Value>) -> Option<DateTime<chrono::FixedOffset>> {
+    DateTime::parse_from_rfc3339(value?.as_str()?).ok()
+}
+
+fn format_date(value: DateTime<chrono::FixedOffset>) -> String {
+    value.to_utc().to_rfc3339_opts(SecondsFormat::Millis, true)
 }
 
 #[cfg(test)]
@@ -518,6 +649,7 @@ mod tests {
                 record(
                     "session",
                     [
+                        ("start_time", json!("2026-07-19T00:00:00Z")),
                         ("total_distance", json!(0)),
                         ("total_elapsed_time", json!(600)),
                         ("total_timer_time", json!(0)),
@@ -525,8 +657,50 @@ mod tests {
                         ("avg_cadence", json!(129)),
                         ("max_cadence", json!(130)),
                         ("time_in_hr_zone", json!([10, 20, 30])),
+                        ("time_in_power_zone", json!([5, 15, 25, 35, 45, 55, 65])),
                     ],
                 ),
+                record(
+                    "power_zone",
+                    [("message_index", json!(0)), ("high_value", json!(150))],
+                ),
+                record(
+                    "power_zone",
+                    [("message_index", json!(1)), ("high_value", json!(220))],
+                ),
+                record(
+                    "power_zone",
+                    [("message_index", json!(2)), ("high_value", json!(280))],
+                ),
+                record(
+                    "power_zone",
+                    [("message_index", json!(3)), ("high_value", json!(340))],
+                ),
+                record(
+                    "power_zone",
+                    [("message_index", json!(4)), ("high_value", json!(410))],
+                ),
+                record(
+                    "power_zone",
+                    [("message_index", json!(5)), ("high_value", json!(500))],
+                ),
+                record(
+                    "record",
+                    [
+                        ("timestamp", json!("2026-07-19T00:00:00Z")),
+                        ("heart_rate", json!(140)),
+                        ("power", json!(0)),
+                    ],
+                ),
+                record(
+                    "record",
+                    [
+                        ("timestamp", json!("2026-07-19T00:00:01Z")),
+                        ("heart_rate", json!(145)),
+                        ("power", json!(245)),
+                    ],
+                ),
+                record("record", [("timestamp", json!("2026-07-19T00:00:02Z"))]),
                 record(
                     "hrzone",
                     [("message_index", json!(0)), ("low_bpm", json!(100))],
@@ -556,6 +730,18 @@ mod tests {
         assert_eq!(result.heart_rate.zones.len(), 3);
         assert_eq!(result.heart_rate.zones[0].duration_seconds, Some(10.0));
         assert_eq!(result.heart_rate.zones[1].min_bpm, None);
+        assert_eq!(result.power.zones.len(), 7);
+        assert_eq!(result.power.zones[0].min_watts, Some(0));
+        assert_eq!(result.power.zones[0].max_watts, Some(150));
+        assert_eq!(result.power.zones[6].min_watts, Some(501));
+        assert_eq!(result.power.zones[6].max_watts, None);
+        assert_eq!(result.power.zones[3].duration_seconds, Some(35.0));
+        assert_eq!(result.samples.len(), 2);
+        assert_eq!(result.samples[0].elapsed_seconds, Some(0.0));
+        assert_eq!(result.samples[0].power_watts, Some(0));
+        assert_eq!(result.samples[1].elapsed_seconds, Some(1.0));
+        assert_eq!(result.samples[1].heart_rate_bpm, Some(145));
+        assert_eq!(result.samples[1].power_watts, Some(245));
         assert_eq!(result.laps[0].pace.value, Some(360.0));
     }
 

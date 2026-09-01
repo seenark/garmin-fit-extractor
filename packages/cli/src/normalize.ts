@@ -116,12 +116,99 @@ const heartRateZones = (session: FitMessage, zoneMessages: FitMessage[]) => {
   });
 };
 
+const aggregateZoneDurations = (records: FitMessage[], key: string): Array<number | null> => {
+  const count = Math.max(
+    0,
+    ...records.map((record) =>
+      Array.isArray(record[key]) ? (record[key] as unknown[]).length : 0,
+    ),
+  );
+  return Array.from({ length: count }, (_, index) => {
+    const values = records
+      .map((record) =>
+        Array.isArray(record[key]) ? numberOrNull((record[key] as unknown[])[index]) : null,
+      )
+      .filter((value): value is number => value !== null);
+    return values.length === 0 ? null : values.reduce((sum, value) => sum + value, 0);
+  });
+};
+
+const powerZones = (
+  session: FitMessage,
+  zoneMessages: FitMessage[],
+  zonesTarget: FitMessage,
+  laps: FitMessage[],
+) => {
+  let durations = Array.isArray(session.timeInPowerZone)
+    ? session.timeInPowerZone.map(numberOrNull)
+    : [];
+  if (durations.length === 0) durations = aggregateZoneDurations(laps, "timeInPowerZone");
+
+  const sortedZones = [...zoneMessages].sort((a, b) => {
+    const aIndex = firstNumber(a, ["messageIndex"]) ?? 0;
+    const bIndex = firstNumber(b, ["messageIndex"]) ?? 0;
+    return aIndex - bIndex;
+  });
+  let boundaries = sortedZones.map((zone) => integerOrNull(zone.highValue));
+  if (boundaries.length === 0 && Array.isArray(zonesTarget.powerZoneHighBoundary)) {
+    boundaries = zonesTarget.powerZoneHighBoundary.map(integerOrNull);
+  }
+
+  const count = Math.max(durations.length, boundaries.length);
+  return Array.from({ length: count }, (_, index) => ({
+    zone: index + 1,
+    minWatts:
+      index === 0
+        ? 0
+        : boundaries[index - 1] === null
+          ? null
+          : (boundaries[index - 1] as number) + 1,
+    maxWatts: boundaries[index] ?? null,
+    durationSeconds: round(durations[index] ?? null, 2),
+  }));
+};
+
+const activitySamples = (session: FitMessage, records: FitMessage[]) => {
+  const origin =
+    dateOrNull(session.startTime ?? session.timestamp) ??
+    records.map((record) => dateOrNull(record.timestamp)).find((value) => value !== null) ??
+    null;
+  const originMillis = origin === null ? null : Date.parse(origin);
+
+  return records.flatMap((record, index) => {
+    const timestamp = dateOrNull(record.timestamp);
+    const timestampMillis = timestamp === null ? null : Date.parse(timestamp);
+    const elapsedSeconds =
+      originMillis !== null && timestampMillis !== null && Number.isFinite(timestampMillis)
+        ? (timestampMillis - originMillis) / 1000
+        : null;
+    const heartRateBpm = integerOrNull(record.heartRate ?? record.hr);
+    const powerWatts = integerOrNull(record.power ?? record.powerWatts);
+    if (heartRateBpm === null && powerWatts === null) return [];
+
+    return [
+      {
+        index,
+        timestamp,
+        elapsedSeconds: round(
+          elapsedSeconds !== null && elapsedSeconds >= 0 ? elapsedSeconds : null,
+          3,
+        ),
+        heartRateBpm,
+        powerWatts,
+      },
+    ];
+  });
+};
+
 export function normalizeFitMessages(input: FitMessages, fileName: string): Analysis {
   const session = messages(input, "sessionMesgs")[0] ?? {};
   const activity = messages(input, "activityMesgs")[0] ?? {};
   const laps = messages(input, "lapMesgs");
   const records = messages(input, "recordMesgs");
   const zones = messages(input, "hrZoneMesgs");
+  const powerZoneMessages = messages(input, "powerZoneMesgs");
+  const zonesTarget = messages(input, "zonesTargetMesgs")[0] ?? {};
 
   const distance = firstNumber(session, ["totalDistance"]);
   const duration = firstNumber(session, ["totalElapsedTime"]);
@@ -179,6 +266,7 @@ export function normalizeFitMessages(input: FitMessages, fileName: string): Anal
     power: {
       averageWatts: integerOrNull(session.avgPower),
       maximumWatts: integerOrNull(session.maxPower),
+      zones: powerZones(session, powerZoneMessages, zonesTarget, laps),
     },
     runningDynamics: {
       cadence: {
@@ -211,6 +299,7 @@ export function normalizeFitMessages(input: FitMessages, fileName: string): Anal
       minimumCelsius: round(minimumTemperature, 2),
       maximumCelsius: round(maximumTemperature, 2),
     },
+    samples: activitySamples(session, records),
     laps: laps.map((lap, index) => {
       const lapDistance = firstNumber(lap, ["totalDistance"]);
       const lapDuration = firstNumber(lap, ["totalElapsedTime"]);

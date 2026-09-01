@@ -142,6 +142,18 @@ export function formatPower(value: number | null): string {
   return isFiniteNumber(value) ? quantity(value, "วัตต์") : "ไม่มีข้อมูล";
 }
 
+export function formatPowerRange(
+  minimum: number | null,
+  maximum: number | null,
+): string {
+  if (isFiniteNumber(minimum) && isFiniteNumber(maximum)) {
+    return `${numberFormatter.format(minimum)}–${numberFormatter.format(maximum)} วัตต์`;
+  }
+  if (isFiniteNumber(minimum)) return `ตั้งแต่ ${formatPower(minimum)}`;
+  if (isFiniteNumber(maximum)) return `ไม่เกิน ${formatPower(maximum)}`;
+  return "ไม่มีข้อมูล";
+}
+
 export function formatTemperature(value: number | null): string {
   return isFiniteNumber(value)
     ? `${numberFormatter.format(value)} องศาเซลเซียส`

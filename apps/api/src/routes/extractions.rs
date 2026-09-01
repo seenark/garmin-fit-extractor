@@ -590,11 +590,27 @@ fn parse_detail(stored: StoredExtraction) -> Result<ExtractionDetail, ApiError> 
     } = stored;
     let normalized = normalized_json.ok_or_else(ApiError::processing_error)?;
     let raw = raw_json.ok_or_else(ApiError::processing_error)?;
+    let raw_records = serde_json::from_str::<Vec<RawFitRecord>>(&raw).map_err(log_processing)?;
+    let normalized_value =
+        serde_json::from_str::<serde_json::Value>(&normalized).map_err(log_processing)?;
+    let analysis = if has_activity_chart_contract(&normalized_value) {
+        serde_json::from_value::<Analysis>(normalized_value).map_err(log_processing)?
+    } else {
+        normalize(&raw_records, &summary.file_name)
+    };
     Ok(ExtractionDetail {
         summary,
-        normalized: Some(serde_json::from_str::<Analysis>(&normalized).map_err(log_processing)?),
-        raw: Some(serde_json::from_str::<Vec<RawFitRecord>>(&raw).map_err(log_processing)?),
+        normalized: Some(analysis),
+        raw: Some(raw_records),
     })
+}
+
+fn has_activity_chart_contract(value: &serde_json::Value) -> bool {
+    value.get("samples").is_some()
+        && value
+            .get("power")
+            .and_then(|power| power.get("zones"))
+            .is_some()
 }
 
 fn pretty_view(stored: StoredExtraction, view: &str) -> Result<Vec<u8>, ApiError> {

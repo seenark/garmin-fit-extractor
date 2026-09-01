@@ -10,6 +10,7 @@ import {
   formatMetric,
   formatPace,
   formatPower,
+  formatPowerRange,
   formatTemperature,
 } from "./formatters";
 
@@ -26,6 +27,12 @@ describe("human-readable formatters", () => {
     expect(formatPower(245)).toBe("245 วัตต์");
     expect(formatTemperature(18.5)).toBe("18.5 องศาเซลเซียส");
     expect(formatCalories(450)).toBe("450 กิโลแคลอรี");
+  });
+
+  test("formats power-zone ranges with open-ended boundaries", () => {
+    expect(formatPowerRange(151, 220)).toBe("151–220 วัตต์");
+    expect(formatPowerRange(501, null)).toBe("ตั้งแต่ 501 วัตต์");
+    expect(formatPowerRange(null, null)).toBe("ไม่มีข้อมูล");
   });
 
   test("formats normalized metrics without exposing API unit names", () => {
