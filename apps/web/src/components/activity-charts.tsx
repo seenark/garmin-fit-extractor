@@ -295,7 +295,13 @@ function LapPaceChart({ data }: { data: readonly LapPaceDatum[] }) {
   );
 }
 
-function HeartRateZoneChart({ data }: { data: readonly HeartRateZoneDatum[] }) {
+function HeartRateZoneChart({
+  data,
+  wide = false,
+}: {
+  data: readonly HeartRateZoneDatum[];
+  wide?: boolean;
+}) {
   const definition = useMemo(
     () => createHeartRateZoneDefinition(data),
     [data],
@@ -303,6 +309,7 @@ function HeartRateZoneChart({ data }: { data: readonly HeartRateZoneDatum[] }) {
 
   return (
     <ChartCard
+      className={wide ? "activity-chart-card--wide" : ""}
       description="เปรียบเทียบเวลาที่บันทึกได้ในแต่ละโซน หัวใจเต้นอยู่ในช่วงไหนนานที่สุด"
       testId="activity-chart-heart-rate-zones"
       title="เวลาใน Heart-rate zone"
@@ -376,11 +383,18 @@ function LapHeartRateChart({ data }: { data: readonly LapHeartRateDatum[] }) {
   );
 }
 
-function ElevationChart({ data }: { data: readonly ElevationDatum[] }) {
+function ElevationChart({
+  data,
+  wide = false,
+}: {
+  data: readonly ElevationDatum[];
+  wide?: boolean;
+}) {
   const definition = useMemo(() => createElevationDefinition(data), [data]);
 
   return (
     <ChartCard
+      className={wide ? "activity-chart-card--wide" : ""}
       description="เปรียบเทียบระยะไต่ระดับขึ้นและลงของกิจกรรมนี้"
       testId="activity-chart-elevation"
       title="สมดุลระดับความสูง"
@@ -426,11 +440,15 @@ export function ActivityCharts({ analysis }: { analysis: Analysis }) {
     Number(heartRateZoneData.length > 0) +
     Number(lapHeartRateData.length > 0) +
     Number(elevationData.length > 0);
+  const compactChartCount =
+    Number(heartRateZoneData.length > 0) + Number(elevationData.length > 0);
 
   return (
     <section
+      id="activity-charts"
       aria-labelledby="activity-charts-heading"
       className="activity-charts"
+      data-testid="activity-charts"
     >
       <div className="activity-charts-heading">
         <h3 id="activity-charts-heading">ภาพรวมจากกราฟ</h3>
@@ -446,12 +464,20 @@ export function ActivityCharts({ analysis }: { analysis: Analysis }) {
         <div className="activity-chart-grid" data-testid="activity-chart-grid">
           {paceData.length > 0 && <LapPaceChart data={paceData} />}
           {heartRateZoneData.length > 0 && (
-            <HeartRateZoneChart data={heartRateZoneData} />
+            <HeartRateZoneChart
+              data={heartRateZoneData}
+              wide={compactChartCount === 1}
+            />
           )}
           {lapHeartRateData.length > 0 && (
             <LapHeartRateChart data={lapHeartRateData} />
           )}
-          {elevationData.length > 0 && <ElevationChart data={elevationData} />}
+          {elevationData.length > 0 && (
+            <ElevationChart
+              data={elevationData}
+              wide={compactChartCount === 1}
+            />
+          )}
         </div>
       )}
       <p className="activity-charts-footnote muted">
