@@ -58,6 +58,94 @@ function UploadPage() {
         </Link>
       </header>
 
+      <section className="download-guide card" aria-labelledby="download-guide-title">
+        <div className="download-guide-intro">
+          <span className="download-guide-kicker">Garmin website only</span>
+          <h2 id="download-guide-title">ยังไม่มีไฟล์ ZIP? ดาวน์โหลดจาก Garmin Connect ตามนี้ได้เลย</h2>
+          <p>
+            ตอนนี้การเอาไฟล์เข้าระบบต้องใช้ <strong>ไฟล์ .zip</strong> ที่ดาวน์โหลดจาก
+            <strong> Garmin Connect website</strong> เท่านั้น แล้วค่อยกลับมาอัปโหลดที่หน้านี้
+          </p>
+          <div className="download-guide-links" aria-label="ลิงก์ไปยัง Garmin Connect">
+            <a href="https://connect.garmin.com/app/home" rel="noreferrer" target="_blank">
+              เปิด Garmin Connect Home
+            </a>
+            <a
+              href="https://connect.garmin.com/app/activities?activityType=running"
+              rel="noreferrer"
+              target="_blank"
+            >
+              เปิดหน้า Activities (Run)
+            </a>
+          </div>
+        </div>
+
+        <ol className="download-guide-steps">
+          <li>
+            <span className="download-guide-step-number" aria-hidden="true">
+              01
+            </span>
+            <div>
+              <h3>Login เข้า Garmin Connect</h3>
+              <p>เปิดหน้า Home แล้วเข้าสู่ระบบด้วยบัญชี Garmin ของคุณ</p>
+            </div>
+          </li>
+          <li>
+            <span className="download-guide-step-number" aria-hidden="true">
+              02
+            </span>
+            <div>
+              <h3>ไปที่ Activities แล้วเลือก Run</h3>
+              <p>ใช้ตัวกรองประเภทกิจกรรมเป็น running เพื่อหา session ที่ต้องการ</p>
+            </div>
+          </li>
+          <li>
+            <span className="download-guide-step-number" aria-hidden="true">
+              03
+            </span>
+            <div>
+              <h3>คลิกชื่อรายการวิ่งใน column Title</h3>
+              <p>เลือกรายการตามวันที่ แล้วเปิดหน้า detail ของกิจกรรมวิ่งครั้งนั้น</p>
+            </div>
+          </li>
+          <li>
+            <span className="download-guide-step-number" aria-hidden="true">
+              04
+            </span>
+            <div>
+              <h3>มองหาไอคอนรูปเฟืองที่มุมขวาบน</h3>
+              <p>ไอคอนนี้ค่อนข้างเล็ก ให้สังเกตบริเวณมุมขวาของหน้ารายละเอียดกิจกรรม</p>
+            </div>
+          </li>
+          <li>
+            <span className="download-guide-step-number" aria-hidden="true">
+              05
+            </span>
+            <div>
+              <h3>เลือก Export File</h3>
+              <p>ในเมนูจะมีหลายตัวเลือก ให้เลือก Export File แบบปกติเพื่อดาวน์โหลด .zip</p>
+            </div>
+          </li>
+          <li>
+            <span className="download-guide-step-number" aria-hidden="true">
+              06
+            </span>
+            <div>
+              <h3>กลับมาอัปโหลดไฟล์ .zip ที่นี่</h3>
+              <p>เมื่อได้ไฟล์แล้ว คุณสามารถลากมาวางหรือกดเลือกไฟล์จากคอมพิวเตอร์ได้ทันที</p>
+            </div>
+          </li>
+        </ol>
+
+        <div className="download-guide-note" role="note">
+          <strong>หมายเหตุ</strong>
+          <p>
+            ถ้าหาเมนู export ไม่เจอ ให้เริ่มจากมองหา <strong>รูปเฟือง</strong> ก่อน
+            จากนั้นเลือก <strong>Export File</strong> แบบธรรมดา ไม่ต้องเลือก export ชนิดอื่น
+          </p>
+        </div>
+      </section>
+
       <div className="workbench-grid">
         <UploadDropzone
           files={files}
