@@ -9,9 +9,13 @@ export const metricSchema = z.object({
 });
 
 export const heartRateZoneSchema = z.object({
-  zone: z.number().int().positive(),
-  minBpm: nullableInteger,
-  maxBpm: nullableInteger,
+  bucketIndex: z.number().int().nonnegative(),
+  label: z.string().min(1),
+  mappingState: z.enum(["mapped", "unmapped"]),
+  zone: z.number().int().positive().nullable(),
+  zoneCount: z.number().int().positive().nullable(),
+  lowerBoundBpm: nullableInteger,
+  upperBoundBpmExclusive: nullableInteger,
   durationSeconds: nullableNumber,
 });
 
@@ -73,6 +77,7 @@ export const analysisSchema = z.object({
   heartRate: z.object({
     averageBpm: nullableInteger,
     maximumBpm: nullableInteger,
+    calculationType: z.string().nullable(),
     zones: z.array(heartRateZoneSchema),
   }),
   pace: z.object({

@@ -14,10 +14,14 @@ export interface LapPaceDatum {
 }
 
 export interface HeartRateZoneDatum {
-  zone: number;
+  bucketIndex: number;
+  label: string;
+  mappingState: "mapped" | "unmapped";
+  zone: number | null;
+  zoneCount: number | null;
   durationSeconds: number;
-  minBpm: number | null;
-  maxBpm: number | null;
+  lowerBoundBpm: number | null;
+  upperBoundBpmExclusive: number | null;
 }
 
 export interface PowerZoneDatum {
@@ -85,10 +89,14 @@ export function buildHeartRateZoneData(
     }
     return [
       {
+        bucketIndex: zone.bucketIndex,
+        label: zone.label,
+        mappingState: zone.mappingState,
         zone: zone.zone,
+        zoneCount: zone.zoneCount,
         durationSeconds: zone.durationSeconds,
-        minBpm: zone.minBpm,
-        maxBpm: zone.maxBpm,
+        lowerBoundBpm: zone.lowerBoundBpm,
+        upperBoundBpmExclusive: zone.upperBoundBpmExclusive,
       },
     ];
   });

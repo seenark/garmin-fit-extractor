@@ -24,7 +24,7 @@ import {
 import {
   formatDuration,
   formatHeartRate,
-  formatHeartRateRange,
+  formatHeartRateBucketRange,
   formatPower,
   formatPowerRange,
   formatPace,
@@ -39,12 +39,23 @@ const chartTheme = {
   palette: ["var(--color-accent)", "var(--color-focus)"],
 };
 
-const GARMIN_HEART_RATE_ZONE_COLORS = [
+const GARMIN_FIVE_ZONE_HEART_RATE_BUCKET_COLORS = {
+  above: "var(--color-zone-red)",
+  below: "var(--color-zone-gray)",
+  zone1: "var(--color-zone-gray)",
+  zone2: "var(--color-zone-blue)",
+  zone3: "var(--color-zone-green)",
+  zone4: "var(--color-zone-orange)",
+  zone5: "var(--color-zone-red)",
+} as const;
+
+const FALLBACK_HEART_RATE_ZONE_COLORS = [
   "var(--color-zone-gray)",
   "var(--color-zone-blue)",
   "var(--color-zone-green)",
   "var(--color-zone-orange)",
   "var(--color-zone-red)",
+  "var(--color-zone-purple)",
 ] as const;
 
 const GARMIN_POWER_ZONE_COLORS = [
@@ -61,6 +72,30 @@ function garminZoneColor(zone: number, palette: readonly string[]): string {
   if (!Number.isFinite(zone)) return palette[0] ?? "var(--color-zone-gray)";
   const index = Math.max(0, Math.min(palette.length - 1, Math.round(zone) - 1));
   return palette[index] ?? palette[0] ?? "var(--color-zone-gray)";
+}
+
+function heartRateBucketColor(datum: HeartRateZoneDatum): string {
+  if (datum.mappingState !== "mapped") return "var(--color-zone-gray)";
+  if (datum.zoneCount !== 5) {
+    return garminZoneColor(datum.bucketIndex + 1, FALLBACK_HEART_RATE_ZONE_COLORS);
+  }
+  if (datum.label === "Below Z1") return GARMIN_FIVE_ZONE_HEART_RATE_BUCKET_COLORS.below;
+  if (datum.label === "Above Z5") return GARMIN_FIVE_ZONE_HEART_RATE_BUCKET_COLORS.above;
+
+  switch (datum.zone) {
+    case 1:
+      return GARMIN_FIVE_ZONE_HEART_RATE_BUCKET_COLORS.zone1;
+    case 2:
+      return GARMIN_FIVE_ZONE_HEART_RATE_BUCKET_COLORS.zone2;
+    case 3:
+      return GARMIN_FIVE_ZONE_HEART_RATE_BUCKET_COLORS.zone3;
+    case 4:
+      return GARMIN_FIVE_ZONE_HEART_RATE_BUCKET_COLORS.zone4;
+    case 5:
+      return GARMIN_FIVE_ZONE_HEART_RATE_BUCKET_COLORS.zone5;
+    default:
+      return garminZoneColor(datum.bucketIndex + 1, FALLBACK_HEART_RATE_ZONE_COLORS);
+  }
 }
 
 function ChartCard({
@@ -119,18 +154,18 @@ function ChartLegend({
 function ZoneLegend({
   items,
 }: {
-  items: Array<{ zone: number; color: string; label: string }>;
+  items: Array<{ key: string; color: string; title: string; label: string }>;
 }) {
   return (
     <ul className="activity-chart-legend activity-chart-zone-legend" aria-label="สีของโซน">
       {items.map((item) => (
-        <li key={item.zone} data-zone={item.zone}>
+        <li key={item.key} data-zone={item.key}>
           <span
             aria-hidden="true"
             className="activity-chart-zone-swatch"
             style={{ backgroundColor: item.color }}
           />
-          <span>{`โซน ${item.zone}`}</span>
+          <span>{item.title}</span>
           <span className="activity-chart-zone-range">{item.label}</span>
         </li>
       ))}
@@ -189,11 +224,10 @@ function createHeartRateZoneDefinition(data: readonly HeartRateZoneDatum[]) {
   return defineChart({
     marks: [
       barY(data, {
-        fill: (datum) =>
-          garminZoneColor(datum.zone, GARMIN_HEART_RATE_ZONE_COLORS),
+        fill: (datum) => heartRateBucketColor(datum),
         id: "heart-rate-zones",
         radius: 4,
-        x: "zone",
+        x: "label",
         y: "durationSeconds",
       }),
     ],
@@ -201,9 +235,9 @@ function createHeartRateZoneDefinition(data: readonly HeartRateZoneDatum[]) {
       x: {
         axis: {
           label: "โซนอัตราการเต้นหัวใจ",
-          ticks: { format: (value) => `โซน ${value}` },
+          ticks: { format: (value) => String(value) },
         },
-        scale: () => scalePoint<number>().padding(0.25),
+        scale: () => scalePoint<string>().padding(0.25),
       },
       y: {
         axis: { label: "เวลา (วินาที)" },
@@ -218,7 +252,7 @@ function createHeartRateZoneDefinition(data: readonly HeartRateZoneDatum[]) {
       use: tooltip,
       format: (point) => {
         const datum = point.datum;
-        return `โซน ${datum.zone}: ${formatDuration(datum.durationSeconds)} · ${formatHeartRateRange(datum.minBpm, datum.maxBpm)}`;
+        return `${datum.label}: ${formatDuration(datum.durationSeconds)} · ${formatHeartRateBucketRange(datum.lowerBoundBpm, datum.upperBoundBpmExclusive, datum.mappingState)}`;
       },
     },
   });
@@ -520,9 +554,14 @@ function HeartRateZoneChart({
         <>
           <ZoneLegend
             items={data.map((datum) => ({
-              color: garminZoneColor(datum.zone, GARMIN_HEART_RATE_ZONE_COLORS),
-              label: formatHeartRateRange(datum.minBpm, datum.maxBpm),
-              zone: datum.zone,
+              key: datum.label,
+              color: heartRateBucketColor(datum),
+              title: datum.label,
+              label: formatHeartRateBucketRange(
+                datum.lowerBoundBpm,
+                datum.upperBoundBpmExclusive,
+                datum.mappingState,
+              ),
             }))}
           />
           <ChartHost>
@@ -570,9 +609,10 @@ function PowerZoneChart({
         <>
           <ZoneLegend
             items={data.map((datum) => ({
+              key: `power-zone-${datum.zone}`,
               color: garminZoneColor(datum.zone, GARMIN_POWER_ZONE_COLORS),
+              title: `โซน ${datum.zone}`,
               label: formatPowerRange(datum.minWatts, datum.maxWatts),
-              zone: datum.zone,
             }))}
           />
           <ChartHost>

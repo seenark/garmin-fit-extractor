@@ -7,7 +7,7 @@ import {
   formatDuration,
   formatActivityType,
   formatHeartRate,
-  formatHeartRateRange,
+  formatHeartRateBucketRange,
   formatLapHeartRate,
   formatMetric,
   formatPower,
@@ -68,9 +68,13 @@ export function AnalysisSummary({ analysis }: { analysis: Analysis }) {
         />
         {analysis.heartRate.zones.map((zone) => (
           <ValueCard
-            key={zone.zone}
-            label={`โซน ${zone.zone}`}
-            value={`${formatHeartRateRange(zone.minBpm, zone.maxBpm)} · ${formatDuration(zone.durationSeconds)}`}
+            key={`${zone.bucketIndex}-${zone.label}`}
+            label={zone.label}
+            value={`${formatHeartRateBucketRange(
+              zone.lowerBoundBpm,
+              zone.upperBoundBpmExclusive,
+              zone.mappingState,
+            )} · ${formatDuration(zone.durationSeconds)}`}
           />
         ))}
       </dl>

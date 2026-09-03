@@ -7,6 +7,7 @@ import {
   formatFileSize,
   formatActivityType,
   formatHeartRate,
+  formatHeartRateBucketRange,
   formatMetric,
   formatPace,
   formatPaceTick,
@@ -40,6 +41,13 @@ describe("human-readable formatters", () => {
     expect(formatPowerRange(151, 220)).toBe("151–220 วัตต์");
     expect(formatPowerRange(501, null)).toBe("ตั้งแต่ 501 วัตต์");
     expect(formatPowerRange(null, null)).toBe("ไม่มีข้อมูล");
+  });
+
+  test("formats heart-rate buckets from inclusive/exclusive bounds", () => {
+    expect(formatHeartRateBucketRange(null, 120, "mapped")).toBe("ต่ำกว่า 120 ครั้งต่อนาที");
+    expect(formatHeartRateBucketRange(120, 136, "mapped")).toBe("120–135 ครั้งต่อนาที");
+    expect(formatHeartRateBucketRange(204, null, "mapped")).toBe("ตั้งแต่ 204 ครั้งต่อนาที");
+    expect(formatHeartRateBucketRange(null, null, "unmapped")).toBe("unknown boundaries");
   });
 
   test("formats normalized metrics without exposing API unit names", () => {

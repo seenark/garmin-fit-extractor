@@ -127,6 +127,24 @@ export function formatHeartRateRange(
   return "ไม่มีข้อมูล";
 }
 
+export function formatHeartRateBucketRange(
+  minimumInclusive: number | null,
+  maximumExclusive: number | null,
+  mappingState: "mapped" | "unmapped",
+): string {
+  if (mappingState === "unmapped") return "unknown boundaries";
+  if (isFiniteNumber(minimumInclusive) && isFiniteNumber(maximumExclusive)) {
+    return `${numberFormatter.format(minimumInclusive)}–${numberFormatter.format(maximumExclusive - 1)} ครั้งต่อนาที`;
+  }
+  if (isFiniteNumber(minimumInclusive)) {
+    return `ตั้งแต่ ${numberFormatter.format(minimumInclusive)} ครั้งต่อนาที`;
+  }
+  if (isFiniteNumber(maximumExclusive)) {
+    return `ต่ำกว่า ${numberFormatter.format(maximumExclusive)} ครั้งต่อนาที`;
+  }
+  return "ไม่มีข้อมูล";
+}
+
 export function formatLapHeartRate(
   average: number | null,
   maximum: number | null,

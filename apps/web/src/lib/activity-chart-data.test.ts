@@ -26,10 +26,48 @@ const analysis: Analysis = {
   heartRate: {
     averageBpm: 150,
     maximumBpm: 180,
+    calculationType: "custom",
     zones: [
-      { zone: 1, minBpm: 100, maxBpm: 119, durationSeconds: 0 },
-      { zone: 2, minBpm: 120, maxBpm: 139, durationSeconds: null },
-      { zone: 3, minBpm: 140, maxBpm: 159, durationSeconds: 900 },
+      {
+        bucketIndex: 0,
+        label: "Below Z1",
+        mappingState: "mapped",
+        zone: null,
+        zoneCount: 5,
+        lowerBoundBpm: null,
+        upperBoundBpmExclusive: 120,
+        durationSeconds: 0,
+      },
+      {
+        bucketIndex: 1,
+        label: "Z1",
+        mappingState: "mapped",
+        zone: 1,
+        zoneCount: 5,
+        lowerBoundBpm: 120,
+        upperBoundBpmExclusive: 136,
+        durationSeconds: null,
+      },
+      {
+        bucketIndex: 2,
+        label: "Z2",
+        mappingState: "mapped",
+        zone: 2,
+        zoneCount: 5,
+        lowerBoundBpm: 136,
+        upperBoundBpmExclusive: 151,
+        durationSeconds: 900,
+      },
+      {
+        bucketIndex: 3,
+        label: "Bucket 4",
+        mappingState: "unmapped",
+        zone: null,
+        zoneCount: null,
+        lowerBoundBpm: null,
+        upperBoundBpmExclusive: null,
+        durationSeconds: 60,
+      },
     ],
   },
   pace: {
@@ -137,10 +175,38 @@ describe("activity chart data", () => {
     ]);
   });
 
-  test("keeps zero-duration zones but omits zones without duration", () => {
+  test("keeps zero-duration and unmapped heart-rate buckets but omits missing durations", () => {
     expect(buildHeartRateZoneData(analysis.heartRate.zones)).toEqual([
-      { zone: 1, durationSeconds: 0, minBpm: 100, maxBpm: 119 },
-      { zone: 3, durationSeconds: 900, minBpm: 140, maxBpm: 159 },
+      {
+        bucketIndex: 0,
+        label: "Below Z1",
+        mappingState: "mapped",
+        zone: null,
+        zoneCount: 5,
+        durationSeconds: 0,
+        lowerBoundBpm: null,
+        upperBoundBpmExclusive: 120,
+      },
+      {
+        bucketIndex: 2,
+        label: "Z2",
+        mappingState: "mapped",
+        zone: 2,
+        zoneCount: 5,
+        durationSeconds: 900,
+        lowerBoundBpm: 136,
+        upperBoundBpmExclusive: 151,
+      },
+      {
+        bucketIndex: 3,
+        label: "Bucket 4",
+        mappingState: "unmapped",
+        zone: null,
+        zoneCount: null,
+        durationSeconds: 60,
+        lowerBoundBpm: null,
+        upperBoundBpmExclusive: null,
+      },
     ]);
   });
 

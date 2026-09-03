@@ -96,7 +96,7 @@ const normalizeCadence = (value: number | null): number | null => {
 
 const heartRateZones = (
   session: FitMessage,
-  zoneMessages: FitMessage[],
+  _zoneMessages: FitMessage[],
   timeInZoneMessages: FitMessage[],
 ) => {
   const sessionTimeInZone = firstReferenceMessage(timeInZoneMessages, "session");
@@ -111,32 +111,52 @@ const heartRateZones = (
     );
   }
 
-  const boundaries = Array.isArray(sessionTimeInZone.hrZoneHighBoundary)
-    ? sessionTimeInZone.hrZoneHighBoundary.map(integerOrNull)
-    : [];
-  const sortedZones = [...zoneMessages].sort((a, b) => {
-    const aIndex = firstNumber(a, ["messageIndex"]) ?? 0;
-    const bIndex = firstNumber(b, ["messageIndex"]) ?? 0;
-    return aIndex - bIndex;
-  });
+  const boundariesSource = Array.isArray(sessionTimeInZone.hrZoneHighBoundary)
+    ? sessionTimeInZone.hrZoneHighBoundary
+    : Array.isArray(session.hrZoneHighBoundary)
+      ? session.hrZoneHighBoundary
+      : [];
+  const boundaries = boundariesSource.map(integerOrNull);
 
-  const count = Math.max(durations.length, sortedZones.length, boundaries.length);
-  return Array.from({ length: count }, (_, index) => {
-    const zone = sortedZones[index] ?? {};
-    const previousBoundary = integerOrNull(boundaries[index - 1]);
-    const minBpm =
-      integerOrNull(zone.lowBpm ?? zone.minHeartRate) ??
-      (previousBoundary === null ? null : previousBoundary + 1);
-    const next = sortedZones[index + 1];
-    const nextMin = next ? integerOrNull(next.lowBpm ?? next.minHeartRate) : null;
-    const directMax = integerOrNull(zone.highBpm ?? zone.maxHeartRate);
-    const boundaryMax = integerOrNull(boundaries[index]);
+  const hasDurations = durations.length > 0;
+  const hasBoundaries = boundaries.length > 0;
+  const isMapped =
+    hasDurations &&
+    hasBoundaries &&
+    durations.length === boundaries.length + 1 &&
+    boundaries.every((value) => value !== null);
+
+  if (!hasDurations) return [];
+
+  if (!isMapped) {
+    return durations.map((duration, index) => ({
+      bucketIndex: index,
+      label: `Bucket ${index + 1}`,
+      mappingState: "unmapped" as const,
+      zone: null,
+      zoneCount: null,
+      lowerBoundBpm: null,
+      upperBoundBpmExclusive: null,
+      durationSeconds: round(duration, 2),
+    }));
+  }
+
+  const zoneCount = durations.length - 2;
+  return durations.map((duration, index) => {
+    const isBelow = index === 0;
+    const isAbove = index === durations.length - 1;
+    const zone = isBelow || isAbove ? null : index;
+    const label = isBelow ? "Below Z1" : isAbove ? `Above Z${zoneCount}` : `Z${index}`;
 
     return {
-      zone: index + 1,
-      minBpm,
-      maxBpm: directMax ?? boundaryMax ?? (nextMin === null ? null : nextMin - 1),
-      durationSeconds: round(durations[index] ?? null, 2),
+      bucketIndex: index,
+      label,
+      mappingState: "mapped" as const,
+      zone,
+      zoneCount,
+      lowerBoundBpm: isBelow ? null : (boundaries[index - 1] ?? null),
+      upperBoundBpmExclusive: isAbove ? null : (boundaries[index] ?? null),
+      durationSeconds: round(duration, 2),
     };
   });
 };
@@ -287,6 +307,9 @@ export function normalizeFitMessages(input: FitMessages, fileName: string): Anal
     heartRate: {
       averageBpm: integerOrNull(session.avgHeartRate),
       maximumBpm: integerOrNull(session.maxHeartRate),
+      calculationType:
+        firstString(firstReferenceMessage(timeInZoneMessages, "session"), ["hrCalcType"]) ??
+        firstString(session, ["hrCalcType"]),
       zones: heartRateZones(session, zones, timeInZoneMessages),
     },
     pace: {

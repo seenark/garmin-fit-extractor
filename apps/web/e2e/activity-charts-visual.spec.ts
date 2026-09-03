@@ -15,12 +15,78 @@ const analysis = {
   heartRate: {
     averageBpm: 151,
     maximumBpm: 181,
+    calculationType: "custom",
     zones: [
-      { zone: 1, minBpm: 100, maxBpm: 119, durationSeconds: 240 },
-      { zone: 2, minBpm: 120, maxBpm: 139, durationSeconds: 900 },
-      { zone: 3, minBpm: 140, maxBpm: 159, durationSeconds: 1500 },
-      { zone: 4, minBpm: 160, maxBpm: 179, durationSeconds: 720 },
-      { zone: 5, minBpm: 180, maxBpm: null, durationSeconds: 180 },
+      {
+        bucketIndex: 0,
+        label: "Below Z1",
+        mappingState: "mapped",
+        zone: null,
+        zoneCount: 5,
+        lowerBoundBpm: null,
+        upperBoundBpmExclusive: 100,
+        durationSeconds: 240,
+      },
+      {
+        bucketIndex: 1,
+        label: "Z1",
+        mappingState: "mapped",
+        zone: 1,
+        zoneCount: 5,
+        lowerBoundBpm: 100,
+        upperBoundBpmExclusive: 120,
+        durationSeconds: 900,
+      },
+      {
+        bucketIndex: 2,
+        label: "Z2",
+        mappingState: "mapped",
+        zone: 2,
+        zoneCount: 5,
+        lowerBoundBpm: 120,
+        upperBoundBpmExclusive: 140,
+        durationSeconds: 1500,
+      },
+      {
+        bucketIndex: 3,
+        label: "Z3",
+        mappingState: "mapped",
+        zone: 3,
+        zoneCount: 5,
+        lowerBoundBpm: 140,
+        upperBoundBpmExclusive: 160,
+        durationSeconds: 720,
+      },
+      {
+        bucketIndex: 4,
+        label: "Z4",
+        mappingState: "mapped",
+        zone: 4,
+        zoneCount: 5,
+        lowerBoundBpm: 160,
+        upperBoundBpmExclusive: 180,
+        durationSeconds: 180,
+      },
+      {
+        bucketIndex: 5,
+        label: "Z5",
+        mappingState: "mapped",
+        zone: 5,
+        zoneCount: 5,
+        lowerBoundBpm: 180,
+        upperBoundBpmExclusive: 190,
+        durationSeconds: 60,
+      },
+      {
+        bucketIndex: 6,
+        label: "Above Z5",
+        mappingState: "mapped",
+        zone: null,
+        zoneCount: 5,
+        lowerBoundBpm: 190,
+        upperBoundBpmExclusive: null,
+        durationSeconds: 30,
+      },
     ],
   },
   pace: {
@@ -134,8 +200,8 @@ test("renders every activity chart without responsive overflow", async ({ page }
   await expect(page.getByRole("img", { name: "กราฟสมดุลระดับความสูง" })).toBeVisible();
 
   const heartRateSwatches = page.getByTestId("activity-chart-heart-rate-zones").locator(".activity-chart-zone-swatch");
-  await expect(heartRateSwatches).toHaveCount(5);
-  for (const [index, token] of ["gray", "blue", "green", "orange", "red"].entries()) {
+  await expect(heartRateSwatches).toHaveCount(7);
+  for (const [index, token] of ["gray", "gray", "blue", "green", "orange", "red", "red"].entries()) {
     await expect(heartRateSwatches.nth(index)).toHaveAttribute(
       "style",
       expect.stringContaining(`--color-zone-${token}`),
