@@ -6,7 +6,7 @@ services:
       context: .
       dockerfile: Dockerfile
     ports:
-      - "${GARMIN_FIT_PORT:-3000}:3000"
+      - "${GARMIN_FIT_PORT:-8100}:3000"
     environment:
       GARMIN_FIT_BIND: ${GARMIN_FIT_BIND:-0.0.0.0:3000}
       GARMIN_FIT_DATABASE_URL: ${GARMIN_FIT_DATABASE_URL:-sqlite:///data/garmin-fit-extractor.sqlite3}

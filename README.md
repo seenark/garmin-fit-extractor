@@ -59,7 +59,7 @@ Successful rows retain compact normalized and raw JSON. Failed rows retain a sta
 | Variable | Default | Purpose |
 | `GARMIN_FIT_IMAGE` | `hadesgod/garmin-fit-extractor` | Docker image repository used by Compose |
 | `GARMIN_FIT_TAG` | `latest` | Docker image tag used by Compose |
-| `GARMIN_FIT_PORT` | `3000` | Host port published by Compose |
+| `GARMIN_FIT_PORT` | `8100` | Host port published by Compose |
 | `GARMIN_FIT_BIND` | `0.0.0.0:3000` | Axum bind address |
 | `GARMIN_FIT_DATABASE_URL` | `sqlite://data/garmin-fit-extractor.sqlite3` | SQLite database |
 | `GARMIN_FIT_STATIC_DIR` | `apps/web/dist` | Built SPA directory |
@@ -81,10 +81,10 @@ Build the single production image (the runtime does not contain Bun, Cargo, sour
 ```bash
 docker buildx build --load -t hadesgod/garmin-fit-extractor:local .
 GARMIN_FIT_TAG=local docker compose up -d
-curl --fail http://localhost:3000/healthz
+curl --fail http://localhost:8100/healthz
 ```
 
-`compose.yaml` uses the image `hadesgod/garmin-fit-extractor:${GARMIN_FIT_TAG:-latest}`, publishes `${GARMIN_FIT_PORT:-3000}`, maps the Google OAuth and runtime variables into the container, and persists SQLite in the stable Docker volume `garmin_fit_data`. Recreate without `-v` to verify persistence:
+`compose.yaml` uses the image `hadesgod/garmin-fit-extractor:${GARMIN_FIT_TAG:-latest}`, publishes `${GARMIN_FIT_PORT:-8100}` on the host to the container's internal port `3000`, maps the Google OAuth and runtime variables into the container, and persists SQLite in the stable Docker volume `garmin_fit_data`. Recreate without `-v` to verify persistence:
 
 ```bash
 docker compose down

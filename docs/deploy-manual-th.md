@@ -18,7 +18,7 @@
 ```dotenv
 GARMIN_FIT_IMAGE=hadesgod/garmin-fit-extractor
 GARMIN_FIT_TAG=latest
-GARMIN_FIT_PORT=3000
+GARMIN_FIT_PORT=8100
 GARMIN_FIT_BIND=0.0.0.0:3000
 GARMIN_FIT_DATABASE_URL=sqlite:///data/garmin-fit-extractor.sqlite3
 GARMIN_FIT_STATIC_DIR=/app/public
@@ -79,7 +79,7 @@ docker buildx build \
 ```sh
 export GARMIN_FIT_IMAGE=hadesgod/garmin-fit-extractor
 export GARMIN_FIT_TAG=REPLACE_WITH_VERSION
-export GARMIN_FIT_PORT=3000
+export GARMIN_FIT_PORT=8100
 docker compose build app
 docker compose push app
 ```
@@ -127,7 +127,7 @@ docker compose logs --tail=100 app
 ตรวจ healthz จาก host ก่อนเปิด tunnel:
 
 ```sh
-curl --fail http://127.0.0.1:${GARMIN_FIT_PORT:-3000}/healthz
+curl --fail http://127.0.0.1:${GARMIN_FIT_PORT:-8100}/healthz
 ```
 
 ต้องได้ HTTP 200. หาก port host เปลี่ยน ให้ใช้ค่า `GARMIN_FIT_PORT` เดียวกับ compose. อย่าใช้ `docker compose down -v`; หากต้องหยุดชั่วคราวใช้ `docker compose stop` หรือ `docker compose down` โดยไม่ใส่ `-v`.
@@ -141,7 +141,7 @@ cloudflared tunnel route dns REPLACE_WITH_TUNNEL_NAME REPLACE_WITH_HOST
 cloudflared tunnel --config REPLACE_WITH_CLOUDFLARED_CONFIG tunnel run REPLACE_WITH_TUNNEL_NAME
 ```
 
-ใน config ให้ service ชี้ไปที่ `http://127.0.0.1:3000` (หรือ address ของ Docker host) และให้ tunnel ใช้ `REPLACE_WITH_HOST`. Application routing จัดการ `/oauth/*`, `/api/v1/*` และหน้า SPA/upload เอง ไม่ต้องสร้าง route แยกสำหรับแต่ละ path. Cloudflare Service Token ไม่ใช่ user identity และห้ามนำมาแทน Google session หรือ bearer OAuth ของ FIT Coach
+ใน config ให้ Cloudflare Tunnel ชี้ไปที่ `http://127.0.0.1:8100` (หรือ address ของ Docker host ที่ publish port นี้) และให้ tunnel ใช้ `REPLACE_WITH_HOST`. ภายใน container แอปยังฟังที่ port `3000`; compose ทำหน้าที่ map host `8100 -> 3000` ให้เอง. Application routing จัดการ `/oauth/*`, `/api/v1/*` และหน้า SPA/upload เอง ไม่ต้องสร้าง route แยกสำหรับแต่ละ path. Cloudflare Service Token ไม่ใช่ user identity และห้ามนำมาแทน Google session หรือ bearer OAuth ของ FIT Coach
 
 ตรวจจากอินเทอร์เน็ต:
 

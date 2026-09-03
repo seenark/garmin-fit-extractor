@@ -593,11 +593,7 @@ fn parse_detail(stored: StoredExtraction) -> Result<ExtractionDetail, ApiError> 
     let raw_records = serde_json::from_str::<Vec<RawFitRecord>>(&raw).map_err(log_processing)?;
     let normalized_value =
         serde_json::from_str::<serde_json::Value>(&normalized).map_err(log_processing)?;
-    let analysis = if has_activity_chart_contract(&normalized_value) {
-        serde_json::from_value::<Analysis>(normalized_value).map_err(log_processing)?
-    } else {
-        normalize(&raw_records, &summary.file_name)
-    };
+    let analysis = parse_or_recompute_analysis(&summary.file_name, normalized_value, &raw_records)?;
     Ok(ExtractionDetail {
         summary,
         normalized: Some(analysis),
@@ -608,21 +604,49 @@ fn parse_detail(stored: StoredExtraction) -> Result<ExtractionDetail, ApiError> 
 fn has_activity_chart_contract(value: &serde_json::Value) -> bool {
     value.get("samples").is_some()
         && value
+            .get("heartRate")
+            .and_then(|heart_rate| heart_rate.get("zones"))
+            .and_then(|zones| zones.as_array())
+            .map(|zones| {
+                zones.is_empty()
+                    || zones[0].get("bucketIndex").is_some()
+                    || zones[0].get("mappingState").is_some()
+            })
+            .unwrap_or(false)
+        && value
             .get("power")
             .and_then(|power| power.get("zones"))
             .is_some()
 }
 
+fn parse_or_recompute_analysis(
+    file_name: &str,
+    normalized_value: serde_json::Value,
+    raw_records: &[RawFitRecord],
+) -> Result<Analysis, ApiError> {
+    if has_activity_chart_contract(&normalized_value)
+        && let Ok(analysis) = serde_json::from_value::<Analysis>(normalized_value.clone())
+    {
+        return Ok(analysis);
+    }
+    Ok(normalize(raw_records, file_name))
+}
+
 fn pretty_view(stored: StoredExtraction, view: &str) -> Result<Vec<u8>, ApiError> {
     let json = match view {
-        "normalized" => serde_json::to_vec_pretty(
-            &serde_json::from_str::<Analysis>(
+        "normalized" => serde_json::to_vec_pretty(&parse_or_recompute_analysis(
+            &stored.summary.file_name,
+            serde_json::from_str::<serde_json::Value>(
                 &stored
                     .normalized_json
                     .ok_or_else(ApiError::processing_error)?,
             )
             .map_err(log_processing)?,
-        ),
+            &serde_json::from_str::<Vec<RawFitRecord>>(
+                &stored.raw_json.ok_or_else(ApiError::processing_error)?,
+            )
+            .map_err(log_processing)?,
+        )?),
         "raw" => serde_json::to_vec_pretty(
             &serde_json::from_str::<Vec<RawFitRecord>>(
                 &stored.raw_json.ok_or_else(ApiError::processing_error)?,

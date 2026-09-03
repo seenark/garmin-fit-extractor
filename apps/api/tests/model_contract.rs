@@ -1,6 +1,6 @@
 use garmin_fit_extractor_api::model::{
     Activity, ActivitySummary, Analysis, Calories, CoachDerivedMetrics, CoachHeartRateZone,
-    CoachLap, CurrentUserResponse, Metric, Source, UserProfile,
+    CoachLap, CurrentUserResponse, HeartRateZoneMappingState, Metric, Source, UserProfile,
 };
 
 #[test]
@@ -125,9 +125,13 @@ fn coach_activity_serializes_snake_case_and_safe_shape() {
             maximum_cadence_spm: Some(190.0),
         }],
         heart_rate_zones: vec![CoachHeartRateZone {
-            zone: 3,
-            min_bpm: Some(140),
-            max_bpm: Some(159),
+            bucket_index: 2,
+            label: "Z2".into(),
+            mapping_state: HeartRateZoneMappingState::Mapped,
+            zone: Some(2),
+            zone_count: Some(5),
+            lower_bound_bpm: Some(136),
+            upper_bound_bpm_exclusive: Some(151),
             duration_s: Some(900.0),
         }],
         derived_metrics: CoachDerivedMetrics {
@@ -141,7 +145,12 @@ fn coach_activity_serializes_snake_case_and_safe_shape() {
     assert_eq!(value["average_pace_s_per_km"], 360.0);
     assert_eq!(value["laps"][0]["start_time"], "2025-01-02T03:04:05Z");
     assert_eq!(value["laps"][0]["average_cadence_spm"], 185.0);
-    assert_eq!(value["heart_rate_zones"][0]["min_bpm"], 140);
+    assert_eq!(value["heart_rate_zones"][0]["label"], "Z2");
+    assert_eq!(value["heart_rate_zones"][0]["lower_bound_bpm"], 136);
+    assert_eq!(
+        value["heart_rate_zones"][0]["upper_bound_bpm_exclusive"],
+        151
+    );
     assert_eq!(value["derived_metrics"]["heart_rate_drift_percent"], 2.5);
     assert!(value.get("activityId").is_none());
 }
@@ -175,9 +184,13 @@ fn coach_activity_omits_optional_scalars_but_keeps_collections() {
             maximum_cadence_spm: None,
         }],
         heart_rate_zones: vec![CoachHeartRateZone {
-            zone: 1,
-            min_bpm: None,
-            max_bpm: None,
+            bucket_index: 0,
+            label: "Bucket 1".into(),
+            mapping_state: HeartRateZoneMappingState::Unmapped,
+            zone: None,
+            zone_count: None,
+            lower_bound_bpm: None,
+            upper_bound_bpm_exclusive: None,
             duration_s: None,
         }],
         derived_metrics: CoachDerivedMetrics {
@@ -199,8 +212,14 @@ fn coach_activity_omits_optional_scalars_but_keeps_collections() {
     }
     assert_eq!(value["laps"][0]["index"], 1);
     assert!(value["laps"][0].get("distance_m").is_none());
-    assert_eq!(value["heart_rate_zones"][0]["zone"], 1);
-    assert!(value["heart_rate_zones"][0].get("min_bpm").is_none());
+    assert_eq!(value["heart_rate_zones"][0]["bucket_index"], 0);
+    assert_eq!(value["heart_rate_zones"][0]["label"], "Bucket 1");
+    assert!(value["heart_rate_zones"][0].get("zone").is_none());
+    assert!(
+        value["heart_rate_zones"][0]
+            .get("lower_bound_bpm")
+            .is_none()
+    );
     assert_eq!(value["derived_metrics"], serde_json::json!({}));
 }
 

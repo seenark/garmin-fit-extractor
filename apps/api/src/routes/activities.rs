@@ -194,8 +194,12 @@ fn to_lap(lap: &crate::model::Lap) -> CoachLap {
 fn to_zone(zone: &crate::model::HeartRateZone) -> CoachHeartRateZone {
     CoachHeartRateZone {
         zone: zone.zone,
-        min_bpm: zone.min_bpm,
-        max_bpm: zone.max_bpm,
+        bucket_index: zone.bucket_index,
+        label: zone.label.clone(),
+        mapping_state: zone.mapping_state,
+        zone_count: zone.zone_count,
+        lower_bound_bpm: zone.lower_bound_bpm,
+        upper_bound_bpm_exclusive: zone.upper_bound_bpm_exclusive,
         duration_s: finite(zone.duration_seconds),
     }
 }

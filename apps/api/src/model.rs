@@ -53,10 +53,21 @@ pub struct Summary {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct HeartRateZone {
-    pub zone: u32,
-    pub min_bpm: Option<i64>,
-    pub max_bpm: Option<i64>,
+    pub bucket_index: u32,
+    pub label: String,
+    pub mapping_state: HeartRateZoneMappingState,
+    pub zone: Option<u32>,
+    pub zone_count: Option<u32>,
+    pub lower_bound_bpm: Option<i64>,
+    pub upper_bound_bpm_exclusive: Option<i64>,
     pub duration_seconds: Option<f64>,
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum HeartRateZoneMappingState {
+    Mapped,
+    Unmapped,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -73,6 +84,7 @@ pub struct PowerZone {
 pub struct HeartRate {
     pub average_bpm: Option<i64>,
     pub maximum_bpm: Option<i64>,
+    pub calculation_type: Option<String>,
     pub zones: Vec<HeartRateZone>,
 }
 
@@ -207,6 +219,7 @@ impl Analysis {
             heart_rate: HeartRate {
                 average_bpm: None,
                 maximum_bpm: None,
+                calculation_type: None,
                 zones: Vec::new(),
             },
             pace: Pace {
@@ -377,11 +390,17 @@ pub struct CoachLap {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub struct CoachHeartRateZone {
-    pub zone: u32,
+    pub bucket_index: u32,
+    pub label: String,
+    pub mapping_state: HeartRateZoneMappingState,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub min_bpm: Option<i64>,
+    pub zone: Option<u32>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub max_bpm: Option<i64>,
+    pub zone_count: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub lower_bound_bpm: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub upper_bound_bpm_exclusive: Option<i64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub duration_s: Option<f64>,
 }

@@ -3,9 +3,9 @@ use serde_json::Value;
 
 use crate::model::RawFitRecord;
 use crate::model::{
-    ActivitySample, Analysis, Cadence, Calories, Elevation, HeartRate, HeartRateZone, Lap,
-    LapHeartRate, LapPower, Metric, NormalizedActivity, Pace, Power, PowerZone, RunningDynamics,
-    Summary, Temperature,
+    ActivitySample, Analysis, Cadence, Calories, Elevation, HeartRate, HeartRateZone,
+    HeartRateZoneMappingState, Lap, LapHeartRate, LapPower, Metric, NormalizedActivity, Pace,
+    Power, PowerZone, RunningDynamics, Summary, Temperature,
 };
 
 pub fn normalize(records: &[RawFitRecord], file_name: &str) -> Analysis {
@@ -73,6 +73,11 @@ pub fn normalize(records: &[RawFitRecord], file_name: &str) -> Analysis {
         heart_rate: HeartRate {
             average_bpm: integer(session.number(&["avgHeartRate"])),
             maximum_bpm: integer(session.number(&["maxHeartRate"])),
+            calculation_type: session_time_in_zone_value(
+                &time_in_zone_messages,
+                session,
+                &["hrCalcType"],
+            ),
             zones: heart_rate_zones(session, zones, &time_in_zone_messages),
         },
         pace: Pace {
@@ -426,7 +431,7 @@ fn activity_samples(session: Record<'_>, records: &[Record<'_>]) -> Vec<Activity
 
 fn heart_rate_zones(
     session: Record<'_>,
-    mut zones: Vec<Record<'_>>,
+    _zones: Vec<Record<'_>>,
     time_in_zone_messages: &[Record<'_>],
 ) -> Vec<HeartRateZone> {
     let session_time_in_zone = first_reference_record(time_in_zone_messages, "session");
@@ -439,51 +444,94 @@ fn heart_rate_zones(
         durations = aggregate_zone_durations(&lap_time_in_zone, &["timeInHrZone"]);
     }
 
-    let boundaries = session_time_in_zone.numbers(&["hrZoneHighBoundary"]);
-    zones.sort_by(|left, right| {
-        left.number(&["messageIndex"])
-            .unwrap_or(0.0)
-            .total_cmp(&right.number(&["messageIndex"]).unwrap_or(0.0))
-    });
+    let boundaries = if !session_time_in_zone
+        .numbers(&["hrZoneHighBoundary"])
+        .is_empty()
+    {
+        session_time_in_zone.numbers(&["hrZoneHighBoundary"])
+    } else {
+        session.numbers(&["hrZoneHighBoundary"])
+    };
 
-    let count = durations.len().max(zones.len()).max(boundaries.len());
-    (0..count)
-        .map(|index| {
-            let zone = zones.get(index).copied().unwrap_or(Record::EMPTY);
-            let previous_boundary = boundaries
-                .get(index.checked_sub(1).unwrap_or(usize::MAX))
-                .copied()
-                .flatten()
-                .and_then(|value| integer(Some(value)))
-                .and_then(|value| value.checked_add(1));
-            let next_minimum = zones
-                .get(index + 1)
-                .copied()
-                .unwrap_or(Record::EMPTY)
-                .number(&["lowBpm", "minHeartRate"])
-                .and_then(|value| integer(Some(value)));
-            let direct_maximum = zone
-                .number(&["highBpm", "maxHeartRate"])
-                .and_then(|value| integer(Some(value)));
-            let boundary_maximum = boundaries
-                .get(index)
-                .copied()
-                .flatten()
-                .and_then(|value| integer(Some(value)));
+    let has_durations = !durations.is_empty();
+    let has_boundaries = !boundaries.is_empty();
+    let is_mapped = has_durations
+        && has_boundaries
+        && durations.len() == boundaries.len() + 1
+        && boundaries
+            .iter()
+            .all(|value| value.and_then(|value| integer(Some(value))).is_some());
+
+    if !has_durations {
+        return Vec::new();
+    }
+
+    if !is_mapped {
+        return durations
+            .iter()
+            .enumerate()
+            .map(|(index, duration)| HeartRateZone {
+                bucket_index: index as u32,
+                label: format!("Bucket {}", index + 1),
+                mapping_state: HeartRateZoneMappingState::Unmapped,
+                zone: None,
+                zone_count: None,
+                lower_bound_bpm: None,
+                upper_bound_bpm_exclusive: None,
+                duration_seconds: round(*duration, 2),
+            })
+            .collect();
+    }
+
+    let zone_count = (durations.len() - 2) as u32;
+    durations
+        .iter()
+        .enumerate()
+        .map(|(index, duration)| {
+            let is_below = index == 0;
+            let is_above = index == durations.len() - 1;
+            let zone = (!is_below && !is_above).then_some(index as u32);
+            let label = if is_below {
+                "Below Z1".to_string()
+            } else if is_above {
+                format!("Above Z{}", zone_count)
+            } else {
+                format!("Z{}", index)
+            };
 
             HeartRateZone {
-                zone: index as u32 + 1,
-                min_bpm: zone
-                    .number(&["lowBpm", "minHeartRate"])
-                    .and_then(|value| integer(Some(value)))
-                    .or(previous_boundary),
-                max_bpm: direct_maximum
-                    .or(boundary_maximum)
-                    .or_else(|| next_minimum.map(|value| value - 1)),
-                duration_seconds: round(durations.get(index).copied().flatten(), 2),
+                bucket_index: index as u32,
+                label,
+                mapping_state: HeartRateZoneMappingState::Mapped,
+                zone,
+                zone_count: Some(zone_count),
+                lower_bound_bpm: if is_below {
+                    None
+                } else {
+                    boundaries[index - 1].and_then(|value| integer(Some(value)))
+                },
+                upper_bound_bpm_exclusive: if is_above {
+                    None
+                } else {
+                    boundaries[index].and_then(|value| integer(Some(value)))
+                },
+                duration_seconds: round(*duration, 2),
             }
         })
         .collect()
+}
+
+fn session_time_in_zone_value(
+    time_in_zone_messages: &[Record<'_>],
+    session: Record<'_>,
+    keys: &[&str],
+) -> Option<String> {
+    let session_time_in_zone = first_reference_record(time_in_zone_messages, "session");
+    session_time_in_zone
+        .string(keys)
+        .or_else(|| session.string(keys))
+        .filter(|value| !value.is_empty())
+        .map(|value| value.to_string())
 }
 
 fn normalize_lap(lap: Record<'_>, index: u32) -> Lap {
@@ -544,7 +592,7 @@ fn format_date(value: DateTime<chrono::FixedOffset>) -> String {
 mod tests {
     use serde_json::{Value, json};
 
-    use crate::model::{RawFitField, RawFitRecord};
+    use crate::model::{HeartRateZoneMappingState, RawFitField, RawFitRecord};
 
     use super::normalize;
 
@@ -659,8 +707,12 @@ mod tests {
             Some(89.12)
         );
         assert_eq!(result.running_dynamics.vertical_ratio.value, Some(7.89));
-        assert_eq!(result.heart_rate.zones[0].min_bpm, Some(100));
-        assert_eq!(result.heart_rate.zones[0].max_bpm, Some(119));
+        assert_eq!(result.heart_rate.calculation_type, None);
+        assert_eq!(result.heart_rate.zones[0].label, "Bucket 1");
+        assert_eq!(
+            result.heart_rate.zones[0].mapping_state,
+            HeartRateZoneMappingState::Unmapped
+        );
         assert_eq!(result.heart_rate.zones[1].duration_seconds, Some(900.0));
         assert_eq!(result.laps[0].index, 1);
         assert_eq!(result.laps[0].pace.value, Some(350.0));
@@ -795,7 +847,10 @@ mod tests {
         assert!(result.pace.moving.value.is_none());
         assert_eq!(result.heart_rate.zones.len(), 3);
         assert_eq!(result.heart_rate.zones[0].duration_seconds, Some(10.0));
-        assert_eq!(result.heart_rate.zones[1].min_bpm, None);
+        assert_eq!(
+            result.heart_rate.zones[1].mapping_state,
+            HeartRateZoneMappingState::Unmapped
+        );
         assert_eq!(result.power.zones.len(), 7);
         assert_eq!(result.power.zones[0].min_watts, Some(0));
         assert_eq!(result.power.zones[0].max_watts, Some(150));
@@ -829,12 +884,21 @@ mod tests {
         );
 
         assert_eq!(result.heart_rate.zones.len(), 3);
-        assert_eq!(result.heart_rate.zones[0].min_bpm, None);
-        assert_eq!(result.heart_rate.zones[0].max_bpm, Some(119));
-        assert_eq!(result.heart_rate.zones[1].min_bpm, Some(120));
-        assert_eq!(result.heart_rate.zones[1].max_bpm, Some(139));
-        assert_eq!(result.heart_rate.zones[2].min_bpm, Some(140));
-        assert_eq!(result.heart_rate.zones[2].max_bpm, None);
+        assert_eq!(result.heart_rate.zones[0].label, "Below Z1");
+        assert_eq!(result.heart_rate.zones[0].lower_bound_bpm, None);
+        assert_eq!(
+            result.heart_rate.zones[0].upper_bound_bpm_exclusive,
+            Some(119)
+        );
+        assert_eq!(result.heart_rate.zones[1].label, "Z1");
+        assert_eq!(result.heart_rate.zones[1].lower_bound_bpm, Some(119));
+        assert_eq!(
+            result.heart_rate.zones[1].upper_bound_bpm_exclusive,
+            Some(139)
+        );
+        assert_eq!(result.heart_rate.zones[2].label, "Above Z1");
+        assert_eq!(result.heart_rate.zones[2].lower_bound_bpm, Some(139));
+        assert_eq!(result.heart_rate.zones[2].upper_bound_bpm_exclusive, None);
         assert_eq!(result.heart_rate.zones[1].duration_seconds, Some(20.0));
 
         assert_eq!(result.power.zones.len(), 3);
