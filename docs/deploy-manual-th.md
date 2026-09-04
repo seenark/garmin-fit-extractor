@@ -5,7 +5,7 @@
 ## ภาพรวมและค่าที่ต้องเตรียม
 
 - Docker Hub repository เริ่มต้นคือ `hadesgod/garmin-fit-extractor`
-- Cloudflare Tunnel ส่ง hostname สาธารณะ `https://REPLACE_WITH_HOST` ไปยัง app port `3000`
+- Cloudflare Tunnel ส่ง hostname สาธารณะ `https://REPLACE_WITH_HOST` ไปยัง host port `8100` ของ Compose (ภายใน container แอปยังฟังที่ `3000`)
 - Google callback ต้องเป็น URL exact: `https://REPLACE_WITH_HOST/api/v1/auth/callback`
 - เว็บใช้ Google session สำหรับ upload และ history; ไม่รับ owner จาก request
 - ตัวแปร ChatGPT ทั้งชุดปล่อยว่างได้เมื่อ deploy เว็บอย่างเดียว ห้ามสร้าง fake ChatGPT credentials ใน production
@@ -37,7 +37,7 @@ RUST_LOG=info
 chmod 600 .env
 ```
 
-`GARMIN_FIT_IMAGE`, `GARMIN_FIT_TAG` และ `GARMIN_FIT_PORT` เป็น convention ที่ compose ใช้ override ได้; compose map ตัวแปร Google และ ChatGPT ให้ container แล้ว ค่า ChatGPT ว่างทั้งกลุ่มไม่กระทบ Google login หรือเว็บ upload/history.
+`GARMIN_FIT_IMAGE`, `GARMIN_FIT_TAG` และ `GARMIN_FIT_PORT` เป็น convention ที่ compose ใช้ override ได้; `compose.yaml` ยัง pin project name เป็น `garmin-fit-extractor` เพื่อให้ `docker compose up` ทุกครั้ง target stack เดิมแทนการ derive ชื่อจาก directory. Compose map ตัวแปร Google และ ChatGPT ให้ container แล้ว ค่า ChatGPT ว่างทั้งกลุ่มไม่กระทบ Google login หรือเว็บ upload/history.
 
 ใน Google Cloud Console เพิ่ม Authorized redirect URI เพียงค่า exact นี้:
 

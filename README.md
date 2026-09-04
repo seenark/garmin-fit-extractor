@@ -84,7 +84,7 @@ GARMIN_FIT_TAG=local docker compose up -d
 curl --fail http://localhost:8100/healthz
 ```
 
-`compose.yaml` uses the image `hadesgod/garmin-fit-extractor:${GARMIN_FIT_TAG:-latest}`, publishes `${GARMIN_FIT_PORT:-8100}` on the host to the container's internal port `3000`, maps the Google OAuth and runtime variables into the container, and persists SQLite in the stable Docker volume `garmin_fit_data`. Recreate without `-v` to verify persistence:
+`compose.yaml` uses the fixed Compose project name `garmin-fit-extractor`, the image `hadesgod/garmin-fit-extractor:${GARMIN_FIT_TAG:-latest}`, publishes `${GARMIN_FIT_PORT:-8100}` on the host to the container's internal port `3000`, maps the Google OAuth and runtime variables into the container, and persists SQLite in the stable Docker volume `garmin_fit_data`. Pinning the project name prevents `docker compose up` from creating a sibling stack based on the directory name (for example `garmin-fit-extractor-repo`) and colliding on port `8100`. Recreate without `-v` to verify persistence:
 
 ```bash
 docker compose down

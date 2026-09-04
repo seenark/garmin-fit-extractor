@@ -1,3 +1,5 @@
+name: garmin-fit-extractor
+
 services:
   app:
     image: ${GARMIN_FIT_IMAGE:-hadesgod/garmin-fit-extractor}:${GARMIN_FIT_TAG:-latest}
