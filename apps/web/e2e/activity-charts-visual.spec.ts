@@ -187,6 +187,7 @@ test("renders every activity chart without responsive overflow", async ({ page }
   await expect(page.getByTestId("activity-chart-power-zones")).toBeVisible();
   await expect(page.getByTestId("activity-chart-power")).toBeVisible();
   await expect(page.getByTestId("activity-chart-heart-rate")).toBeVisible();
+  await expect(page.getByTestId("activity-chart-cadence")).toBeVisible();
   await expect(page.getByTestId("activity-chart-elevation")).toBeVisible();
   await expect(page.getByRole("img", { name: "กราฟเพซต่อรอบ" })).toBeVisible();
   await expect(page.getByText("เพซ (นาที/กม.)", { exact: true })).toBeVisible();
@@ -197,6 +198,7 @@ test("renders every activity chart without responsive overflow", async ({ page }
   await expect(page.getByRole("img", { name: "กราฟเวลาใน Power zone" })).toBeVisible();
   await expect(page.getByRole("img", { name: "กราฟกำลังตลอดกิจกรรม" })).toBeVisible();
   await expect(page.getByRole("img", { name: "กราฟอัตราการเต้นหัวใจต่อรอบ" })).toBeVisible();
+  await expect(page.getByRole("img", { name: "กราฟรอบขาต่อรอบ" })).toBeVisible();
   await expect(page.getByRole("img", { name: "กราฟสมดุลระดับความสูง" })).toBeVisible();
 
   const heartRateSwatches = page.getByTestId("activity-chart-heart-rate-zones").locator(".activity-chart-zone-swatch");

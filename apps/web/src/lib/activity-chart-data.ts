@@ -48,6 +48,12 @@ export interface LapHeartRateDatum {
   maximumBpm: number | null;
 }
 
+export interface LapCadenceDatum {
+  lap: number;
+  averageStepsPerMinute: number | null;
+  maximumStepsPerMinute: number | null;
+}
+
 export interface ElevationDatum {
   direction: "ascent" | "descent";
   meters: number;
@@ -143,6 +149,16 @@ export function buildLapHeartRateData(laps: Lap[]): LapHeartRateDatum[] {
     return averageBpm === null && maximumBpm === null
       ? []
       : [{ lap: lap.index, averageBpm, maximumBpm }];
+  });
+}
+
+export function buildLapCadenceData(laps: Lap[]): LapCadenceDatum[] {
+  return laps.flatMap((lap) => {
+    const averageStepsPerMinute = finiteOptional(lap.cadence.averageStepsPerMinute);
+    const maximumStepsPerMinute = finiteOptional(lap.cadence.maximumStepsPerMinute);
+    return averageStepsPerMinute === null && maximumStepsPerMinute === null
+      ? []
+      : [{ lap: lap.index, averageStepsPerMinute, maximumStepsPerMinute }];
   });
 }
 

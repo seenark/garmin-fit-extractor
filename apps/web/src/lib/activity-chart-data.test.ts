@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import type { Analysis } from "./api-types";
 import {
   buildElevationData,
+  buildLapCadenceData,
   buildHeartRateZoneData,
   buildLapHeartRateData,
   buildLapPowerData,
@@ -236,6 +237,13 @@ describe("activity chart data", () => {
       { lap: 1, averageBpm: 145, maximumBpm: 155 },
       { lap: 2, averageBpm: null, maximumBpm: 160 },
       { lap: 3, averageBpm: 150, maximumBpm: null },
+    ]);
+  });
+
+  test("keeps a lap when either cadence series has a valid value", () => {
+    expect(buildLapCadenceData(analysis.laps)).toEqual([
+      { lap: 1, averageStepsPerMinute: 174, maximumStepsPerMinute: 182 },
+      { lap: 3, averageStepsPerMinute: 178, maximumStepsPerMinute: null },
     ]);
   });
 

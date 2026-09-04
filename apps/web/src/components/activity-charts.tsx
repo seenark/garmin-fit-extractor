@@ -8,6 +8,7 @@ import type { Analysis } from "../lib/api-types";
 import {
   buildElevationData,
   buildHeartRateZoneData,
+  buildLapCadenceData,
   buildLapPowerData,
   buildLapHeartRateData,
   buildLapPaceData,
@@ -15,6 +16,7 @@ import {
   buildPowerZoneData,
   type ElevationDatum,
   type HeartRateZoneDatum,
+  type LapCadenceDatum,
   type LapHeartRateDatum,
   type LapPowerDatum,
   type LapPaceDatum,
@@ -22,6 +24,7 @@ import {
   type PowerZoneDatum,
 } from "../lib/activity-chart-data";
 import {
+  formatCadence,
   formatDuration,
   formatHeartRate,
   formatHeartRateBucketRange,
@@ -351,6 +354,69 @@ function createLapHeartRateDefinition(
           const label =
             point.markId === "lap-heart-rate-average" ? "ค่าเฉลี่ย" : "ค่าสูงสุด";
           return `${label}: ${formatHeartRate(point.datum.bpm)}`;
+        });
+
+        return [`รอบ ${firstPoint.datum.lap}`, ...rows].join("\n");
+      },
+    },
+  });
+}
+
+type LapCadenceSeriesDatum = {
+  lap: number;
+  stepsPerMinute: number;
+};
+
+function createLapCadenceDefinition(
+  averageData: readonly LapCadenceSeriesDatum[],
+  maximumData: readonly LapCadenceSeriesDatum[],
+) {
+  return defineChart({
+    marks: [
+      lineY(averageData, {
+        id: "lap-cadence-average",
+        points: true,
+        stroke: "var(--color-zone-green)",
+        strokeWidth: 2.5,
+        x: "lap",
+        y: "stepsPerMinute",
+      }),
+      lineY(maximumData, {
+        id: "lap-cadence-maximum",
+        points: true,
+        stroke: "var(--color-zone-purple)",
+        strokeDasharray: "6 4",
+        strokeWidth: 2,
+        x: "lap",
+        y: "stepsPerMinute",
+      }),
+    ],
+    scales: {
+      x: {
+        axis: {
+          label: "รอบ",
+          ticks: { format: (value) => `รอบ ${value}` },
+        },
+        scale: () => scalePoint<number>().padding(0.2),
+      },
+      y: {
+        axis: { label: "รอบขา (ก้าวต่อนาที)" },
+        grid: true,
+        nice: true,
+        scale: scaleLinear,
+      },
+    },
+    theme: chartTheme,
+    focus: "group-x",
+    tooltip: {
+      use: tooltip,
+      formatGroup: (points) => {
+        const firstPoint = points[0];
+        if (!firstPoint) return "";
+
+        const rows = points.map((point) => {
+          const label = point.markId === "lap-cadence-average" ? "ค่าเฉลี่ย" : "ค่าสูงสุด";
+          return `${label}: ${formatCadence(point.datum.stepsPerMinute)}`;
         });
 
         return [`รอบ ${firstPoint.datum.lap}`, ...rows].join("\n");
@@ -725,6 +791,59 @@ function PowerChart({ data }: { data: readonly PowerDatum[] }) {
   );
 }
 
+function LapCadenceChart({ data }: { data: readonly LapCadenceDatum[] }) {
+  const averageData = useMemo(
+    () =>
+      data.flatMap((datum) =>
+        datum.averageStepsPerMinute === null
+          ? []
+          : [{ lap: datum.lap, stepsPerMinute: datum.averageStepsPerMinute }],
+      ),
+    [data],
+  );
+  const maximumData = useMemo(
+    () =>
+      data.flatMap((datum) =>
+        datum.maximumStepsPerMinute === null
+          ? []
+          : [{ lap: datum.lap, stepsPerMinute: datum.maximumStepsPerMinute }],
+      ),
+    [data],
+  );
+  const definition = useMemo(
+    () => createLapCadenceDefinition(averageData, maximumData),
+    [averageData, maximumData],
+  );
+
+  return (
+    <ChartCard
+      className="activity-chart-card--wide"
+      description="ดูค่าเฉลี่ยและค่าสูงสุดของรอบขาในแต่ละรอบ เส้นประคือค่าสูงสุด"
+      testId="activity-chart-cadence"
+      title="รอบขาต่อรอบ"
+    >
+      <ChartLegend
+        items={[
+          { label: "ค่าเฉลี่ย", style: "accent" },
+          { label: "ค่าสูงสุด", style: "dashed" },
+        ]}
+      />
+      <ChartHost>
+        <Chart
+          ariaDescription="เส้นทึบแสดงรอบขาเฉลี่ย เส้นประแสดงรอบขาสูงสุด และค่าที่หายไปจะเว้นว่าง"
+          ariaLabel="กราฟรอบขาต่อรอบ"
+          className="activity-chart"
+          definition={definition}
+          height={250}
+          idPrefix="lap-cadence"
+          initialWidth={640}
+          tabIndex={0}
+        />
+      </ChartHost>
+    </ChartCard>
+  );
+}
+
 function LapPowerChart({ data }: { data: readonly LapPowerDatum[] }) {
   const averageData = useMemo(
     () =>
@@ -838,6 +957,10 @@ export function ActivityCharts({ analysis }: { analysis: Analysis }) {
     () => buildLapHeartRateData(analysis.laps),
     [analysis.laps],
   );
+  const lapCadenceData = useMemo(
+    () => buildLapCadenceData(analysis.laps),
+    [analysis.laps],
+  );
   const elevationData = useMemo(
     () => buildElevationData(analysis.elevation),
     [analysis.elevation],
@@ -849,6 +972,7 @@ export function ActivityCharts({ analysis }: { analysis: Analysis }) {
     Number(powerZoneData.length > 0) +
     Number(hasPowerChart) +
     Number(lapHeartRateData.length > 0) +
+    Number(lapCadenceData.length > 0) +
     Number(elevationData.length > 0);
   const compactChartCount =
     Number(heartRateZoneData.length > 0) +
@@ -893,6 +1017,7 @@ export function ActivityCharts({ analysis }: { analysis: Analysis }) {
         {lapHeartRateData.length > 0 && (
           <LapHeartRateChart data={lapHeartRateData} />
         )}
+        {lapCadenceData.length > 0 && <LapCadenceChart data={lapCadenceData} />}
         {elevationData.length > 0 && (
           <ElevationChart
             data={elevationData}
