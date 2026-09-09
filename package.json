@@ -9,7 +9,7 @@
   "scripts": {
     "dev": "bun --filter @garmin-fit-extractor/web dev & cargo run -p garmin-fit-extractor-api",
     "build": "bun run --filter '*' build && cargo build --workspace",
-    "test": "bun --filter '*' test && cargo test --workspace",
+    "test": "bun --filter '*' test && cargo test --workspace -- --test-threads=1",
     "test:e2e": "bun run scripts/e2e.ts",
     "check": "bun run --filter '*' check && cargo fmt --check --all && cargo clippy --workspace --all-targets -- -D warnings"
   },

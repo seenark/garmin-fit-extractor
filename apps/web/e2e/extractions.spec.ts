@@ -13,30 +13,87 @@ test("authenticates, uploads ZIP members, copies raw JSON, and isolates history"
   await context.grantPermissions(["clipboard-read", "clipboard-write"]);
 
   await page.goto("/");
+  await expect(page.locator("h1")).toHaveCount(1);
+  await expect(page.locator("h1")).toHaveText(
+    "เรื่องวิ่งของคุณ มีอะไรให้ดูมากกว่าที่คิด",
+  );
+  await expect(page.getByText("Runner’s Garage", { exact: true }).first()).toBeVisible();
+  await expect(page.getByText("by น้ำเน่ารันคลับ", { exact: true }).first()).toBeVisible();
+  await expect(page.getByRole("link", { name: "Runs", exact: true })).toHaveAttribute(
+    "href",
+    "/history?offset=0&order=desc",
+  );
+  await expect(page.getByRole("link", { name: "Shoes", exact: true })).toHaveAttribute(
+    "href",
+    "/shoes",
+  );
   await expect(
-    page.getByRole("heading", {
-      name: "ข้อมูลที่ Garmin บันทึกไว้ ยังดูได้ละเอียดกว่านี้",
-    }),
-  ).toBeVisible();
-  await expect(
-    page.getByRole("button", { name: "เข้าสู่ระบบ", exact: true }),
-  ).toBeVisible();
-  await expect(
-    page.getByRole("button", { name: "เข้าสู่ระบบด้วย Google" }),
-  ).toHaveCount(0);
+    page
+      .getByRole("navigation", { name: "เมนูหลัก" })
+      .getByRole("link", { name: "เพิ่มข้อมูลวิ่ง", exact: true }),
+  ).toHaveAttribute(
+    "href",
+    "/upload",
+  );
+  await expect(page.getByRole("link", { name: "หน้าหลัก", exact: true })).toHaveCount(0);
+  await expect(page.getByTestId("home-runs-cta")).toHaveAttribute(
+    "href",
+    "/history?offset=0&order=desc",
+  );
+  await expect(page.getByTestId("home-shoes-cta")).toHaveAttribute("href", "/shoes");
+  await expect(page.getByTestId("home-run-visualization")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "หยิบใช้ทีละเรื่อง ไม่ต้องเปิดทุกอย่างพร้อมกัน" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "เก็บข้อมูลของเราเอง ดูให้ลึกขึ้น" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "ไซซ์เดียวกัน ไม่ได้แปลว่าฟิตเหมือนกัน" })).toBeVisible();
+  await page.goto("/shoes/new-balance-fuelcell-supercomp-elite-v6");
+  await expect(page.getByRole("heading", { name: "FuelCell SuperComp Elite v6" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "กำลังหาว่าคู่นี้ควรใส่ไซซ์อะไร?" })).toBeVisible();
+  await expect(page.getByRole("combobox", { name: "รองเท้าที่คุณใส่อยู่" })).toBeVisible();
+  await expect(page.getByLabel("ระบบไซซ์")).toHaveValue("US_M");
+  await expect(page.getByRole("radio", { name: "พอดี" })).toBeChecked();
+  await page.getByRole("button", { name: "เทียบไซซ์" }).click();
+  await expect(page.getByTestId("shoe-size-result")).toContainText("US Men’s 9.5");
+  await expect(page.getByTestId("shoe-size-result")).toContainText("1 direct bridge");
+  await expect(page.getByTestId("shoe-size-result")).toContainText("Papziza");
+  await expect(page.getByTestId("shoe-size-result")).toContainText("ไซซ์ที่ผู้รีวิวใส่จริง");
+  await expect(page.getByRole("heading", { name: "ตารางไซซ์ทางการ" })).toBeVisible();
   await page.goto("/history");
   await expect(
     page.getByRole("button", { name: "เข้าสู่ระบบด้วย Google" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "ดูประวัติการวิ่งของคุณ" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "เข้าสู่ระบบเพื่อไปต่อ" }),
+  ).toBeVisible();
+  await page.goto("/upload");
+  await expect(
+    page.getByRole("heading", {
+      name: "ยังไม่มีไฟล์ ZIP? ดาวน์โหลดจาก Garmin Connect ตามนี้ได้เลย",
+    }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("heading", {
+      name: "อ่าน guide ได้ก่อน โดยยังไม่ต้องเข้าสู่ระบบ",
+    }),
+  ).toBeVisible();
+  await expect(page.getByTestId("upload-dropzone")).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "เข้าสู่ระบบเพื่ออัปโหลด" }),
   ).toBeVisible();
 
   await page.goto("/api/v1/auth/test-login?user=alice");
   await expect(page.getByText("alice", { exact: true })).toBeVisible();
   await expect(
     page.getByRole("heading", {
-      name: "ข้อมูลที่ Garmin บันทึกไว้ ยังดูได้ละเอียดกว่านี้",
+      name: "เรื่องวิ่งของคุณ มีอะไรให้ดูมากกว่าที่คิด",
     }),
   ).toBeVisible();
-  await page.getByTestId("home-upload-cta").click();
+  await page
+    .getByRole("navigation", { name: "เมนูหลัก" })
+    .getByRole("link", { name: "เพิ่มข้อมูลวิ่ง", exact: true })
+    .click();
   await expect(page).toHaveURL(/\/upload$/);
 
   const activityBytes = await readFile(activityArchive);
@@ -134,7 +191,7 @@ test("authenticates, uploads ZIP members, copies raw JSON, and isolates history"
     expect.any(Array),
   );
 
-  await page.getByRole("link", { name: "ประวัติ", exact: true }).click();
+  await page.getByRole("link", { name: "Runs", exact: true }).click();
   await expect(page).toHaveURL(/\/history(?:\?.*)?$/);
   const historyTable = page.getByTestId("history-table");
   await expect(historyTable).toContainText("activity.zip::activity.fit");
@@ -170,13 +227,13 @@ test("authenticates, uploads ZIP members, copies raw JSON, and isolates history"
   ).toBeVisible();
   await page.goto("/api/v1/auth/test-login?user=bob");
   await expect(page.getByText("bob", { exact: true })).toBeVisible();
-  await page.getByRole("link", { name: "ประวัติ", exact: true }).click();
+  await page.getByRole("link", { name: "Runs", exact: true }).click();
   await expect(page.getByText("ยังไม่มีไฟล์ที่อัปโหลด")).toBeVisible();
 
   await page.getByRole("button", { name: "ออกจากระบบ" }).click();
   await page.goto("/api/v1/auth/test-login?user=alice");
   await expect(page.getByText("alice", { exact: true })).toBeVisible();
-  await page.getByRole("link", { name: "ประวัติ", exact: true }).click();
+  await page.getByRole("link", { name: "Runs", exact: true }).click();
   await expect(historyTable).toContainText("corrupt.zip");
   await page.getByRole("button", { name: "ล้างประวัติ" }).click();
   await expect(confirmation).toBeVisible();
@@ -200,4 +257,20 @@ test("authenticates, uploads ZIP members, copies raw JSON, and isolates history"
     body: page.url(),
     contentType: "text/plain",
   });
+});
+
+test("fails closed when a shoe pair has no reviewer bridge", async ({ page }) => {
+  await page.goto("/shoes/puma-deviate-pure-nitro");
+  await expect(page.getByRole("heading", { name: "Deviate Pure NITRO" })).toBeVisible();
+
+  const referenceShoes = page.getByRole("combobox", { name: "รองเท้าที่คุณใส่อยู่" });
+  await referenceShoes.click();
+  await referenceShoes.fill("Camel Carbon 5K");
+  await page.getByRole("option", { name: /Carbon 5K/i }).click();
+  await page.getByRole("button", { name: "เทียบไซซ์" }).click();
+
+  const result = page.getByTestId("shoe-size-result");
+  await expect(result).toContainText("ยังไม่มีข้อมูลตรงพอให้เทียบคู่นี้");
+  await expect(result).toContainText("จะไม่เดา");
+  await expect(page.getByTestId("shoe-size-evidence")).toContainText("ไม่มี reviewer bridge");
 });

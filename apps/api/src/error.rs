@@ -255,6 +255,64 @@ impl ApiError {
     }
 }
 
+impl ApiError {
+    pub const fn admin_forbidden() -> Self {
+        Self::new(
+            StatusCode::FORBIDDEN,
+            "ADMIN_FORBIDDEN",
+            "Administrator access is required.",
+        )
+    }
+
+    pub const fn admin_origin_forbidden() -> Self {
+        Self::new(
+            StatusCode::FORBIDDEN,
+            "ADMIN_ORIGIN_FORBIDDEN",
+            "The request origin is not allowed.",
+        )
+    }
+
+    pub const fn invalid_transcript_entry() -> Self {
+        Self::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_TRANSCRIPT_ENTRY",
+            "Transcript entry fields are invalid.",
+        )
+    }
+
+    pub const fn transcript_duplicate_video() -> Self {
+        Self::new(
+            StatusCode::CONFLICT,
+            "TRANSCRIPT_DUPLICATE_VIDEO",
+            "A transcript entry for this video already exists.",
+        )
+    }
+
+    pub const fn transcript_not_found() -> Self {
+        Self::new(
+            StatusCode::NOT_FOUND,
+            "TRANSCRIPT_NOT_FOUND",
+            "Transcript entry was not found.",
+        )
+    }
+
+    pub const fn transcript_confirmation_required() -> Self {
+        Self::new(
+            StatusCode::BAD_REQUEST,
+            "TRANSCRIPT_CONFIRMATION_REQUIRED",
+            "The exact DELETE_ALL confirmation is required.",
+        )
+    }
+
+    pub const fn transcript_database_error() -> Self {
+        Self::new(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "TRANSCRIPT_DATABASE_ERROR",
+            "The transcript entry could not be saved.",
+        )
+    }
+}
+
 impl IntoResponse for ApiError {
     fn into_response(self) -> Response {
         (

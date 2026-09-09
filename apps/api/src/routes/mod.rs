@@ -9,4 +9,5 @@ pub fn router() -> axum::Router<crate::app::AppState> {
         .merge(oauth::router())
         .merge(activities::router())
         .merge(extractions::router())
+        .merge(crate::admin::router())
 }

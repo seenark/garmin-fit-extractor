@@ -71,7 +71,7 @@ async fn login(
     sqlx::query(
         "INSERT INTO oauth_states
             (state_hash, nonce, pkce_verifier, continue_path, created_at, expires_at)
-         VALUES (?, ?, ?, ?, ?, ?)",
+         VALUES ($1, $2, $3, $4, $5, $6)",
     )
     .bind(hash_token(csrf_state.secret()))
     .bind(nonce.secret())
@@ -250,8 +250,8 @@ async fn callback_inner(
     sqlx::query(
         "INSERT INTO users
             (id, google_subject, email, display_name, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?)
-         ON CONFLICT(google_subject) DO UPDATE SET
+         VALUES ($1, $2, $3, $4, $5, $6)
+         ON CONFLICT (google_subject) DO UPDATE SET
             email = excluded.email,
             display_name = COALESCE(excluded.display_name, users.display_name),
             updated_at = excluded.updated_at",
@@ -271,7 +271,7 @@ async fn callback_inner(
             oauth_error,
         )
     })?;
-    let user_id = sqlx::query_scalar::<_, String>("SELECT id FROM users WHERE google_subject = ?")
+    let user_id = sqlx::query_scalar::<_, String>("SELECT id FROM users WHERE google_subject = $1")
         .bind(claims.subject().as_str())
         .fetch_one(&state.db)
         .await
@@ -286,7 +286,7 @@ async fn callback_inner(
     let session_token = Uuid::new_v4().to_string();
     sqlx::query(
         "INSERT INTO sessions (token_hash, user_id, created_at, expires_at)
-         VALUES (?, ?, ?, ?)",
+         VALUES ($1, $2, $3, $4)",
     )
     .bind(hash_token(&session_token))
     .bind(user_id)
@@ -309,22 +309,25 @@ async fn callback_inner(
 }
 
 async fn consume_oauth_state(
-    pool: &sqlx::SqlitePool,
+    pool: &sqlx::PgPool,
     state_value: &str,
 ) -> Result<Option<(String, String, Option<String>)>, sqlx::Error> {
+    let now = timestamp_now();
     sqlx::query(
         "DELETE FROM oauth_states
-         WHERE expires_at <= strftime('%Y-%m-%dT%H:%M:%fZ', 'now')",
+         WHERE expires_at <= $1",
     )
+    .bind(&now)
     .execute(pool)
     .await?;
     sqlx::query_as::<_, (String, String, Option<String>)>(
         "DELETE FROM oauth_states
-         WHERE state_hash = ?
-           AND expires_at > strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+         WHERE state_hash = $1
+           AND expires_at > $2
          RETURNING nonce, pkce_verifier, continue_path",
     )
     .bind(hash_token(state_value))
+    .bind(&now)
     .fetch_optional(pool)
     .await
 }
@@ -358,17 +361,22 @@ async fn me(
     let user = match token {
         Some(token) => session_user(&state.db, &token).await?,
         None => {
+            let now = timestamp_now();
             sqlx::query(
                 "DELETE FROM sessions
-                 WHERE expires_at <= strftime('%Y-%m-%dT%H:%M:%fZ', 'now')",
+                 WHERE expires_at <= $1",
             )
+            .bind(now)
             .execute(&state.db)
             .await
             .map_err(|_| ApiError::service_unavailable())?;
             None
         }
     };
-    Ok(Json(CurrentUserResponse { user }))
+    let is_admin = user
+        .as_ref()
+        .is_some_and(|profile| state.auth.is_admin_email(&profile.email));
+    Ok(Json(CurrentUserResponse { user, is_admin }))
 }
 
 async fn logout(
@@ -379,7 +387,7 @@ async fn logout(
         .get(SESSION_COOKIE)
         .map(|cookie| cookie.value().to_owned());
     if let Some(token) = token {
-        sqlx::query("DELETE FROM sessions WHERE token_hash = ?")
+        sqlx::query("DELETE FROM sessions WHERE token_hash = $1")
             .bind(hash_token(&token))
             .execute(&state.db)
             .await
@@ -411,8 +419,8 @@ async fn test_login(
     sqlx::query(
         "INSERT INTO users
             (id, google_subject, email, display_name, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?)
-         ON CONFLICT(google_subject) DO UPDATE SET
+         VALUES ($1, $2, $3, $4, $5, $6)
+         ON CONFLICT (google_subject) DO UPDATE SET
             email = excluded.email,
             display_name = excluded.display_name,
             updated_at = excluded.updated_at",
@@ -430,7 +438,7 @@ async fn test_login(
     let token = Uuid::new_v4().to_string();
     sqlx::query(
         "INSERT INTO sessions (token_hash, user_id, created_at, expires_at)
-         VALUES (?, ?, ?, ?)",
+         VALUES ($1, $2, $3, $4)",
     )
     .bind(hash_token(&token))
     .bind(user_id.to_string())

@@ -33,10 +33,10 @@ describe("API client", () => {
     const calls: Array<{ input: RequestInfo; init?: RequestInit }> = [];
     globalThis.fetch = (async (input: RequestInfo, init?: RequestInit) => {
       calls.push({ input, init });
-      return Response.json({ user: null });
+      return Response.json({ user: null, isAdmin: false });
     }) as typeof fetch;
 
-    await expect(getCurrentUser()).resolves.toEqual({ user: null });
+    await expect(getCurrentUser()).resolves.toEqual({ user: null, isAdmin: false });
     expect(calls[0]?.input).toBe("/api/v1/auth/me");
     expect(calls[0]?.init).toMatchObject({ credentials: "same-origin" });
   });

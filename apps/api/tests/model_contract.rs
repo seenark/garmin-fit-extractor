@@ -82,6 +82,7 @@ fn current_user_serializes_with_camel_case_profile_fields() {
             email: "alice@example.test".into(),
             display_name: Some("Alice".into()),
         }),
+        is_admin: true,
     };
 
     assert_eq!(
@@ -91,7 +92,8 @@ fn current_user_serializes_with_camel_case_profile_fields() {
                 "id": "00000000-0000-0000-0000-000000000001",
                 "email": "alice@example.test",
                 "displayName": "Alice"
-            }
+            },
+            "isAdmin": true
         })
     );
 }

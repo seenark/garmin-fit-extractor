@@ -1,6 +1,6 @@
-# คู่มือ deploy เว็บแบบ production-like (ยังไม่เชื่อม Custom GPT)
+# คู่มือ deploy Runner’s Garage แบบ production-like (ยังไม่เชื่อม Custom GPT)
 
-คู่มือนี้ deploy เว็บ Garmin FIT Extractor ด้วย Docker และ Cloudflare Tunnel โดยใช้ Google OAuth จริง แต่ยังไม่ตั้งค่า ChatGPT/Custom GPT. ทำตามลำดับและแทนค่าทุก `REPLACE_WITH_*` ก่อนรัน
+คู่มือนี้ deploy เว็บ Runner’s Garage ด้วย Docker และ Cloudflare Tunnel โดยใช้ Google OAuth จริง แต่ยังไม่ตั้งค่า ChatGPT/Custom GPT. ทำตามลำดับและแทนค่าทุก `REPLACE_WITH_*` ก่อนรัน
 
 ## ภาพรวมและค่าที่ต้องเตรียม
 
@@ -9,18 +9,23 @@
 - Google callback ต้องเป็น URL exact: `https://REPLACE_WITH_HOST/api/v1/auth/callback`
 - เว็บใช้ Google session สำหรับ upload และ history; ไม่รับ owner จาก request
 - ตัวแปร ChatGPT ทั้งชุดปล่อยว่างได้เมื่อ deploy เว็บอย่างเดียว ห้ามสร้าง fake ChatGPT credentials ใน production
-- Docker volume SQLite ต้อง persist และต้อง backup ก่อนการบำรุงรักษา ห้ามใช้ `docker compose down -v` เพราะจะลบ volume และประวัติ
+- PostgreSQL bind mount `./db-data` ต้อง persist และต้อง backup ก่อนการบำรุงรักษา ห้ามใช้ `docker compose down -v` กับ stack ที่มีข้อมูล
 
 ## 1. ตั้งค่า environment อย่างปลอดภัย
 
 สร้าง `.env` บนเครื่อง deploy (อย่า commit และอย่าแปะค่าจริงใน issue/chat):
 
 ```dotenv
+POSTGRES_DB=garmin_fit_extractor
+POSTGRES_USER=garmin_fit_extractor
+POSTGRES_PASSWORD=REPLACE_WITH_URL_SAFE_PASSWORD
+DATABASE_URL=postgresql://garmin_fit_extractor:REPLACE_WITH_URL_SAFE_PASSWORD@postgres:5432/garmin_fit_extractor
+ADMIN_EMAILS=
+GARMIN_FIT_APP_ORIGIN=https://REPLACE_WITH_HOST
 GARMIN_FIT_IMAGE=hadesgod/garmin-fit-extractor
 GARMIN_FIT_TAG=latest
 GARMIN_FIT_PORT=8100
 GARMIN_FIT_BIND=0.0.0.0:3000
-GARMIN_FIT_DATABASE_URL=sqlite:///data/garmin-fit-extractor.sqlite3
 GARMIN_FIT_STATIC_DIR=/app/public
 GARMIN_FIT_GOOGLE_CLIENT_ID=REPLACE_WITH_GOOGLE_CLIENT_ID
 GARMIN_FIT_GOOGLE_CLIENT_SECRET=REPLACE_WITH_GOOGLE_CLIENT_SECRET
@@ -37,7 +42,7 @@ RUST_LOG=info
 chmod 600 .env
 ```
 
-`GARMIN_FIT_IMAGE`, `GARMIN_FIT_TAG` และ `GARMIN_FIT_PORT` เป็น convention ที่ compose ใช้ override ได้; `compose.yaml` ยัง pin project name เป็น `garmin-fit-extractor` เพื่อให้ `docker compose up` ทุกครั้ง target stack เดิมแทนการ derive ชื่อจาก directory. Compose map ตัวแปร Google และ ChatGPT ให้ container แล้ว ค่า ChatGPT ว่างทั้งกลุ่มไม่กระทบ Google login หรือเว็บ upload/history.
+`POSTGRES_*`, `DATABASE_URL`, `GARMIN_FIT_IMAGE`, `GARMIN_FIT_TAG` และ `GARMIN_FIT_PORT` เป็นค่าที่ Compose ใช้; `compose.yaml` pin project name เป็น `garmin-fit-extractor` เพื่อให้ `docker compose up` target stack เดิม. Compose map ตัวแปร PostgreSQL, Google และ ChatGPT ให้ container แล้ว ค่า ChatGPT ว่างทั้งกลุ่มไม่กระทบ Google login หรือเว็บ upload/history.
 
 ใน Google Cloud Console เพิ่ม Authorized redirect URI เพียงค่า exact นี้:
 
@@ -80,8 +85,8 @@ docker buildx build \
 export GARMIN_FIT_IMAGE=hadesgod/garmin-fit-extractor
 export GARMIN_FIT_TAG=REPLACE_WITH_VERSION
 export GARMIN_FIT_PORT=8100
-docker compose build app
-docker compose push app
+docker compose build garmin-fit-extractor
+docker compose push garmin-fit-extractor
 ```
 
 Compose มีทั้ง `build` และ `image` ใน service เดียวกัน จึงใช้ build จาก source หรือ push image ที่ tag ไว้ได้. หาก deploy ไป host คนละ architecture ให้ใช้คำสั่ง multi-platform ด้านบนแทน.
@@ -106,22 +111,22 @@ git push origin vX.Y.Z
 ใช้ image ที่ push แล้ว:
 
 ```sh
-docker compose pull app
-docker compose up -d app
+docker compose pull garmin-fit-extractor
+docker compose up -d garmin-fit-extractor
 ```
 
 หรือ build จาก source บน host:
 
 ```sh
-docker compose build app
-docker compose up -d app
+docker compose build garmin-fit-extractor
+docker compose up -d garmin-fit-extractor
 ```
 
 ตรวจสถานะและ log:
 
 ```sh
 docker compose ps
-docker compose logs --tail=100 app
+docker compose logs --tail=100 garmin-fit-extractor
 ```
 
 ตรวจ healthz จาก host ก่อนเปิด tunnel:
@@ -134,7 +139,7 @@ curl --fail http://127.0.0.1:${GARMIN_FIT_PORT:-8100}/healthz
 
 ## 5. Cloudflare Tunnel
 
-สร้าง tunnel ตามชื่อที่คุณควบคุม และ route hostname เดียวไปยัง app:
+สร้าง tunnel ตามชื่อที่คุณควบคุม และ route hostname เดียวไปยัง service `garmin-fit-extractor`:
 
 ```sh
 cloudflared tunnel route dns REPLACE_WITH_TUNNEL_NAME REPLACE_WITH_HOST
@@ -155,23 +160,22 @@ curl --fail https://REPLACE_WITH_HOST/healthz
 https://REPLACE_WITH_HOST/api/v1/auth/callback
 ```
 
-## 6. SQLite persistence และ backup
+## 6. PostgreSQL persistence และ backup
 
-Compose ใช้ named volume `garmin_fit_data` mount ที่ `/data`; database URL ชี้ไปที่ `/data/garmin-fit-extractor.sqlite3`. สำรองก่อน upgrade/ย้ายเครื่อง โดยหยุด app เพื่อให้ไฟล์นิ่ง:
+Compose ใช้ bind mount `./db-data:/var/lib/postgresql` สำหรับ PostgreSQL 18 และ app เชื่อมผ่าน service name `postgres`. สำรองก่อน upgrade/ย้ายเครื่อง โดยหยุดเฉพาะ app เพื่อไม่ให้มี application writes:
 
 ```sh
+docker compose stop garmin-fit-extractor
 mkdir -p backups
-docker compose stop app
-docker run --rm \
-  -v garmin_fit_data:/data:ro \
-  -v "$PWD/backups":/backup \
-  alpine:3.20 \
-  cp /data/garmin-fit-extractor.sqlite3 /backup/garmin-fit-extractor-REPLACE_WITH_DATE.sqlite3
-docker compose start app
+docker compose exec -T postgres sh -c \
+  'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" --format=custom' \
+  > backups/garmin-fit-postgres-REPLACE_WITH_DATE.dump
+chmod 0400 backups/garmin-fit-postgres-REPLACE_WITH_DATE.dump
+docker compose start garmin-fit-extractor
 ```
 
-แทน `REPLACE_WITH_DATE` เช่น `2026-08-13`. เก็บ backup นอก host และทดสอบการกู้คืนตามนโยบายองค์กร. ห้ามใช้ `docker compose down -v` เพราะ `-v` ลบ `garmin_fit_data` และทำให้ SQLite, users, sessions, extractions และ history หาย
+แทน `REPLACE_WITH_DATE` เช่น `2026-08-13`. เก็บ dump นอก host และทดสอบการกู้คืนตามนโยบายองค์กร. ห้ามลบ `db-data`; หากต้องหยุดชั่วคราวใช้ `docker compose stop` หรือ `docker compose down` โดยไม่ใส่ `-v`. ฐาน SQLite เดิมต้องสำรอง/เก็บแยกตาม runbook migration ไม่ควร mount เข้า unified service
 
 ## 7. ขอบเขตของ deployment นี้
 
-เมื่อ healthz และ Google login ผ่านแล้ว เว็บพร้อมใช้งาน: ผู้ใช้ upload FIT และอ่าน history ด้วย Google session ได้ตามปกติ. ยังไม่ต้องตั้งค่า `GARMIN_FIT_CHATGPT_*`, ไม่ต้องสร้าง Custom GPT, ไม่ต้อง import OpenAPI, ไม่ต้องตั้ง OAuth callback ของ GPT และไม่ต้องสร้าง fake credentials. เมื่อพร้อมทำ integration ภายหลัง ค่อยใช้ client ID `FIT_COACH_CHATGPT`, secret จริงที่เก็บนอก repository และ callback URL exact ที่ GPT editor แสดง; อย่าใส่ค่าดังกล่าวลงคู่มือนี้หรือใน image
+เมื่อ healthz และ Google login ผ่านแล้ว เว็บพร้อมใช้งาน: ผู้ใช้ upload FIT และอ่าน history ด้วย Google session ได้ตามปกติ. PostgreSQL เป็น runtime database เดียวของ unified service; ฐาน SQLite เดิมต้องหยุดและเก็บไว้นอก stack จนกว่าจะยอมรับผล migration. ยังไม่ต้องตั้งค่า `GARMIN_FIT_CHATGPT_*`, ไม่ต้องสร้าง Custom GPT, ไม่ต้อง import OpenAPI, ไม่ต้องตั้ง OAuth callback ของ GPT และไม่ต้องสร้าง fake credentials. เมื่อพร้อมทำ integration ภายหลัง ค่อยใช้ client ID `FIT_COACH_CHATGPT`, secret จริงที่เก็บนอก repository และ callback URL exact ที่ GPT editor แสดง; อย่าใส่ค่าดังกล่าวลงคู่มือนี้หรือใน image

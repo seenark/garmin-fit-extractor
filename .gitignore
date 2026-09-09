@@ -13,3 +13,12 @@ playwright-report/
 test-results/
 apps/api/tests/fixtures/activity.fit
 !apps/api/tests/fixtures/activity.fit
+db-data/
+migration-artifacts/
+*.dump
+*.dump.*
+*.sql.gz
+*.sqlite
+*.sqlite-*
+*.sqlite3
+*.sqlite3-*

@@ -9,8 +9,10 @@ pub struct UserProfile {
     pub display_name: Option<String>,
 }
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct CurrentUserResponse {
     pub user: Option<UserProfile>,
+    pub is_admin: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]

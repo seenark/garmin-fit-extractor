@@ -3,12 +3,10 @@ use crate::{
     model::{ApiErrorDetail, ExtractionPage, ExtractionStatus, ExtractionSummary},
 };
 use sqlx::{
-    Row, SqlitePool,
-    sqlite::{
-        SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions, SqliteRow, SqliteSynchronous,
-    },
+    PgPool, Row,
+    postgres::{PgConnectOptions, PgPoolOptions, PgRow},
 };
-use std::{str::FromStr, time::Duration};
+use std::str::FromStr;
 use time::{OffsetDateTime, format_description::FormatItem, macros::format_description};
 use uuid::Uuid;
 const CREATED_AT_FORMAT: &[FormatItem<'static>] =
@@ -78,14 +76,9 @@ pub struct OAuthRefreshToken {
     pub user_id: Uuid,
     pub scope: String,
 }
-pub async fn connect(database_url: &str) -> Result<SqlitePool, sqlx::Error> {
-    let options = SqliteConnectOptions::from_str(database_url)?
-        .create_if_missing(true)
-        .foreign_keys(true)
-        .journal_mode(SqliteJournalMode::Wal)
-        .synchronous(SqliteSynchronous::Normal)
-        .busy_timeout(Duration::from_secs(5));
-    let pool = SqlitePoolOptions::new()
+pub async fn connect(database_url: &str) -> Result<PgPool, sqlx::Error> {
+    let options = PgConnectOptions::from_str(database_url)?;
+    let pool = PgPoolOptions::new()
         .max_connections(5)
         .connect_with(options)
         .await?;
@@ -94,7 +87,7 @@ pub async fn connect(database_url: &str) -> Result<SqlitePool, sqlx::Error> {
     Ok(pool)
 }
 pub async fn insert_success(
-    pool: &SqlitePool,
+    pool: &PgPool,
     value: NewSuccess,
 ) -> Result<ExtractionSummary, sqlx::Error> {
     let NewSuccess {
@@ -117,11 +110,11 @@ pub async fn insert_success(
         created_at: created_at_now(),
     };
     let mut transaction = pool.begin().await?;
-    sqlx::query("INSERT INTO extractions (id,user_id,file_name,file_size_bytes,status,activity_type,activity_date,normalized_json,raw_json,error_code,error_message,created_at) VALUES (?,?,?,?, 'succeeded',?,?,?,?,NULL,NULL,?)")
+    sqlx::query("INSERT INTO extractions (id,user_id,file_name,file_size_bytes,status,activity_type,activity_date,normalized_json,raw_json,error_code,error_message,created_at) VALUES ($1,$2,$3,$4, 'succeeded',$5,$6,$7,$8,NULL,NULL,$9)")
         .bind(summary.id.to_string())
         .bind(user_id.to_string())
         .bind(&summary.file_name)
-        .bind(as_sqlite_size(summary.file_size_bytes)?)
+        .bind(as_database_size(summary.file_size_bytes)?)
         .bind(&summary.activity_type)
         .bind(&summary.activity_date)
         .bind(&normalized_json)
@@ -133,7 +126,7 @@ pub async fn insert_success(
         sqlx::query(
             "INSERT INTO activities
                 (id, owner_id, sport, started_at, activity_data, created_at)
-             VALUES (?, ?, ?, ?, ?, ?)",
+             VALUES ($1, $2, $3, $4, $5, $6)",
         )
         .bind(summary.id.to_string())
         .bind(user_id.to_string())
@@ -148,7 +141,7 @@ pub async fn insert_success(
     Ok(summary)
 }
 pub async fn insert_failure(
-    pool: &SqlitePool,
+    pool: &PgPool,
     value: NewFailure,
 ) -> Result<ExtractionSummary, sqlx::Error> {
     let mut summary = ExtractionSummary {
@@ -166,19 +159,19 @@ pub async fn insert_failure(
         created_at: created_at_now(),
     };
     let e = summary.error.as_ref().unwrap();
-    sqlx::query("INSERT INTO extractions (id,user_id,file_name,file_size_bytes,status,activity_type,activity_date,normalized_json,raw_json,error_code,error_message,created_at) VALUES (?,?,?,?,'failed',NULL,NULL,NULL,NULL,?,?,?)").bind(summary.id.to_string()).bind(value.user_id.to_string()).bind(&summary.file_name).bind(as_sqlite_size(summary.file_size_bytes)?).bind(&e.code).bind(&e.message).bind(&summary.created_at).execute(pool).await?;
+    sqlx::query("INSERT INTO extractions (id,user_id,file_name,file_size_bytes,status,activity_type,activity_date,normalized_json,raw_json,error_code,error_message,created_at) VALUES ($1,$2,$3,$4,'failed',NULL,NULL,NULL,NULL,$5,$6,$7)").bind(summary.id.to_string()).bind(value.user_id.to_string()).bind(&summary.file_name).bind(as_database_size(summary.file_size_bytes)?).bind(&e.code).bind(&e.message).bind(&summary.created_at).execute(pool).await?;
     summary.error.as_mut().unwrap().file_name = Some(summary.file_name.clone());
     Ok(summary)
 }
 pub async fn list(
-    pool: &SqlitePool,
+    pool: &PgPool,
     user_id: Uuid,
     limit: u32,
     offset: u32,
     order: HistoryOrder,
 ) -> Result<ExtractionPage, sqlx::Error> {
     let user_id = user_id.to_string();
-    let total = sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM extractions WHERE user_id = ?")
+    let total = sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM extractions WHERE user_id = $1")
         .bind(&user_id)
         .fetch_one(pool)
         .await?;
@@ -189,9 +182,9 @@ pub async fn list(
                 "SELECT id, file_name, file_size_bytes, status, activity_type, activity_date,
                         error_code, error_message, created_at
                  FROM extractions
-                 WHERE user_id = ?
+                 WHERE user_id = $1
                  ORDER BY activity_date IS NULL ASC, activity_date ASC, created_at DESC, id DESC
-                 LIMIT ? OFFSET ?",
+                 LIMIT $2 OFFSET $3",
             )
             .bind(&user_id)
             .bind(i64::from(limit))
@@ -204,9 +197,9 @@ pub async fn list(
                 "SELECT id, file_name, file_size_bytes, status, activity_type, activity_date,
                         error_code, error_message, created_at
                  FROM extractions
-                 WHERE user_id = ?
+                 WHERE user_id = $1
                  ORDER BY activity_date IS NULL ASC, activity_date DESC, created_at DESC, id DESC
-                 LIMIT ? OFFSET ?",
+                 LIMIT $2 OFFSET $3",
             )
             .bind(&user_id)
             .bind(i64::from(limit))
@@ -227,15 +220,15 @@ pub async fn list(
     })
 }
 pub async fn get_stored(
-    pool: &SqlitePool,
+    pool: &PgPool,
     user_id: Uuid,
     id: Uuid,
 ) -> Result<Option<StoredExtraction>, sqlx::Error> {
-    sqlx::query("SELECT id,file_name,file_size_bytes,status,activity_type,activity_date,normalized_json,raw_json,error_code,error_message,created_at FROM extractions WHERE user_id=? AND id=?").bind(user_id.to_string()).bind(id.to_string()).fetch_optional(pool).await?.map(stored_from_row).transpose()
+    sqlx::query("SELECT id,file_name,file_size_bytes,status,activity_type,activity_date,normalized_json,raw_json,error_code,error_message,created_at FROM extractions WHERE user_id=$1 AND id=$2").bind(user_id.to_string()).bind(id.to_string()).fetch_optional(pool).await?.map(stored_from_row).transpose()
 }
-pub async fn delete_one(pool: &SqlitePool, user_id: Uuid, id: Uuid) -> Result<bool, sqlx::Error> {
+pub async fn delete_one(pool: &PgPool, user_id: Uuid, id: Uuid) -> Result<bool, sqlx::Error> {
     Ok(
-        sqlx::query("DELETE FROM extractions WHERE user_id=? AND id=?")
+        sqlx::query("DELETE FROM extractions WHERE user_id=$1 AND id=$2")
             .bind(user_id.to_string())
             .bind(id.to_string())
             .execute(pool)
@@ -244,14 +237,14 @@ pub async fn delete_one(pool: &SqlitePool, user_id: Uuid, id: Uuid) -> Result<bo
             == 1,
     )
 }
-pub async fn delete_all(pool: &SqlitePool, user_id: Uuid) -> Result<u64, sqlx::Error> {
-    Ok(sqlx::query("DELETE FROM extractions WHERE user_id=?")
+pub async fn delete_all(pool: &PgPool, user_id: Uuid) -> Result<u64, sqlx::Error> {
+    Ok(sqlx::query("DELETE FROM extractions WHERE user_id=$1")
         .bind(user_id.to_string())
         .execute(pool)
         .await?
         .rows_affected())
 }
-fn summary_from_row(row: &SqliteRow) -> Result<ExtractionSummary, sqlx::Error> {
+fn summary_from_row(row: &PgRow) -> Result<ExtractionSummary, sqlx::Error> {
     let id: String = row.try_get("id")?;
     let status: String = row.try_get("status")?;
     let file_name: String = row.try_get("file_name")?;
@@ -277,7 +270,7 @@ fn summary_from_row(row: &SqliteRow) -> Result<ExtractionSummary, sqlx::Error> {
         created_at: row.try_get("created_at")?,
     })
 }
-fn stored_from_row(row: SqliteRow) -> Result<StoredExtraction, sqlx::Error> {
+fn stored_from_row(row: PgRow) -> Result<StoredExtraction, sqlx::Error> {
     Ok(StoredExtraction {
         summary: summary_from_row(&row)?,
         normalized_json: row.try_get("normalized_json")?,
@@ -289,8 +282,8 @@ fn created_at_now() -> String {
         .format(CREATED_AT_FORMAT)
         .expect("fixed timestamp format is valid")
 }
-fn as_sqlite_size(size: u64) -> Result<i64, sqlx::Error> {
-    i64::try_from(size).map_err(|_| protocol_error("file size exceeds SQLite integer range"))
+fn as_database_size(size: u64) -> Result<i64, sqlx::Error> {
+    i64::try_from(size).map_err(|_| protocol_error("file size exceeds PostgreSQL integer range"))
 }
 fn nonnegative_u64(value: i64, name: &str) -> Result<u64, sqlx::Error> {
     u64::try_from(value).map_err(|_| protocol_error(&format!("{name} is negative")))
@@ -305,15 +298,16 @@ fn status_from_database(value: &str) -> Result<ExtractionStatus, sqlx::Error> {
 fn protocol_error(message: &str) -> sqlx::Error {
     sqlx::Error::Protocol(message.to_owned())
 }
-pub async fn backfill_activities(pool: &SqlitePool) -> Result<(), sqlx::Error> {
+pub async fn backfill_activities(pool: &PgPool) -> Result<(), sqlx::Error> {
     sqlx::query(
-        "INSERT OR IGNORE INTO activities
+        "INSERT INTO activities
             (id, owner_id, sport, started_at, activity_data, created_at)
          SELECT id, user_id, activity_type, activity_date, normalized_json, created_at
          FROM extractions
          WHERE status = 'succeeded'
            AND activity_date IS NOT NULL
-           AND normalized_json IS NOT NULL",
+           AND normalized_json IS NOT NULL
+         ON CONFLICT (id) DO NOTHING",
     )
     .execute(pool)
     .await?;
@@ -321,13 +315,13 @@ pub async fn backfill_activities(pool: &SqlitePool) -> Result<(), sqlx::Error> {
 }
 
 pub async fn latest_activity(
-    pool: &SqlitePool,
+    pool: &PgPool,
     owner_id: Uuid,
 ) -> Result<Option<StoredActivity>, sqlx::Error> {
     sqlx::query(
         "SELECT id, owner_id, sport, started_at, activity_data, created_at
          FROM activities
-         WHERE owner_id = ?
+         WHERE owner_id = $1
          ORDER BY started_at DESC, id DESC
          LIMIT 1",
     )
@@ -339,16 +333,16 @@ pub async fn latest_activity(
 }
 
 pub async fn list_activities(
-    pool: &SqlitePool,
+    pool: &PgPool,
     owner_id: Uuid,
     limit: u32,
 ) -> Result<Vec<StoredActivity>, sqlx::Error> {
     sqlx::query(
         "SELECT id, owner_id, sport, started_at, activity_data, created_at
          FROM activities
-         WHERE owner_id = ?
+         WHERE owner_id = $1
          ORDER BY started_at DESC, id DESC
-         LIMIT ?",
+         LIMIT $2",
     )
     .bind(owner_id.to_string())
     .bind(i64::from(limit))
@@ -360,14 +354,14 @@ pub async fn list_activities(
 }
 
 pub async fn get_activity(
-    pool: &SqlitePool,
+    pool: &PgPool,
     owner_id: Uuid,
     activity_id: Uuid,
 ) -> Result<Option<StoredActivity>, sqlx::Error> {
     sqlx::query(
         "SELECT id, owner_id, sport, started_at, activity_data, created_at
          FROM activities
-         WHERE id = ? AND owner_id = ?",
+         WHERE id = $1 AND owner_id = $2",
     )
     .bind(activity_id.to_string())
     .bind(owner_id.to_string())
@@ -379,7 +373,7 @@ pub async fn get_activity(
 
 #[allow(clippy::too_many_arguments)]
 pub async fn insert_oauth_login_request(
-    pool: &SqlitePool,
+    pool: &PgPool,
     request_token: &str,
     client_id: &str,
     redirect_uri: &str,
@@ -391,7 +385,7 @@ pub async fn insert_oauth_login_request(
     sqlx::query(
         "INSERT INTO oauth_login_requests
             (request_hash, client_id, redirect_uri, state, scope, created_at, expires_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?)",
+         VALUES ($1, $2, $3, $4, $5, $6, $7)",
     )
     .bind(hash_token(request_token))
     .bind(client_id)
@@ -406,17 +400,19 @@ pub async fn insert_oauth_login_request(
 }
 
 pub async fn consume_oauth_login_request(
-    pool: &SqlitePool,
+    pool: &PgPool,
     request_token: &str,
 ) -> Result<Option<OAuthLoginRequest>, sqlx::Error> {
     delete_expired_oauth_records(pool).await?;
+    let now = timestamp_now();
     sqlx::query_as::<_, (String, String, String, String)>(
         "DELETE FROM oauth_login_requests
-         WHERE request_hash = ?
-           AND expires_at > strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+         WHERE request_hash = $1
+           AND expires_at > $2
          RETURNING client_id, redirect_uri, state, scope",
     )
     .bind(hash_token(request_token))
+    .bind(now)
     .fetch_optional(pool)
     .await
     .map(|row| {
@@ -433,7 +429,7 @@ pub async fn consume_oauth_login_request(
 
 #[allow(clippy::too_many_arguments)]
 pub async fn insert_authorization_code(
-    pool: &SqlitePool,
+    pool: &PgPool,
     code: &str,
     client_id: &str,
     redirect_uri: &str,
@@ -445,7 +441,7 @@ pub async fn insert_authorization_code(
     sqlx::query(
         "INSERT INTO oauth_authorization_codes
             (code_hash, client_id, redirect_uri, user_id, scope, created_at, expires_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?)",
+         VALUES ($1, $2, $3, $4, $5, $6, $7)",
     )
     .bind(hash_token(code))
     .bind(client_id)
@@ -460,26 +456,28 @@ pub async fn insert_authorization_code(
 }
 
 pub async fn consume_authorization_code(
-    pool: &SqlitePool,
+    pool: &PgPool,
     code: &str,
     client_id: &str,
     redirect_uri: &str,
     scope: &str,
 ) -> Result<Option<OAuthAuthorizationCode>, sqlx::Error> {
     delete_expired_oauth_records(pool).await?;
+    let now = timestamp_now();
     sqlx::query_as::<_, (String, String, String, String)>(
         "DELETE FROM oauth_authorization_codes
-         WHERE code_hash = ?
-           AND client_id = ?
-           AND redirect_uri = ?
-           AND scope = ?
-           AND expires_at > strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+         WHERE code_hash = $1
+           AND client_id = $2
+           AND redirect_uri = $3
+           AND scope = $4
+           AND expires_at > $5
          RETURNING client_id, redirect_uri, user_id, scope",
     )
     .bind(hash_token(code))
     .bind(client_id)
     .bind(redirect_uri)
     .bind(scope)
+    .bind(now)
     .fetch_optional(pool)
     .await?
     .map(|(client_id, redirect_uri, user_id, scope)| {
@@ -495,7 +493,7 @@ pub async fn consume_authorization_code(
 
 #[allow(clippy::too_many_arguments)]
 pub async fn insert_token_pair(
-    pool: &SqlitePool,
+    pool: &PgPool,
     access_token: &str,
     refresh_token: &str,
     client_id: &str,
@@ -523,22 +521,25 @@ pub async fn insert_token_pair(
 }
 
 pub async fn find_access_token(
-    pool: &SqlitePool,
+    pool: &PgPool,
     token: &str,
 ) -> Result<Option<OAuthAccessToken>, sqlx::Error> {
+    let now = timestamp_now();
     sqlx::query(
         "DELETE FROM oauth_access_tokens
-         WHERE expires_at <= strftime('%Y-%m-%dT%H:%M:%fZ', 'now')",
+         WHERE expires_at <= $1",
     )
+    .bind(&now)
     .execute(pool)
     .await?;
     sqlx::query_as::<_, (String, String, String)>(
         "SELECT client_id, user_id, scope
          FROM oauth_access_tokens
-         WHERE token_hash = ?
-           AND expires_at > strftime('%Y-%m-%dT%H:%M:%fZ', 'now')",
+         WHERE token_hash = $1
+           AND expires_at > $2",
     )
     .bind(hash_token(token))
+    .bind(&now)
     .fetch_optional(pool)
     .await?
     .map(|(client_id, user_id, scope)| {
@@ -553,7 +554,7 @@ pub async fn find_access_token(
 
 #[allow(clippy::too_many_arguments)]
 pub async fn rotate_refresh_token(
-    pool: &SqlitePool,
+    pool: &PgPool,
     refresh_token: &str,
     client_id: &str,
     scope: &str,
@@ -565,18 +566,20 @@ pub async fn rotate_refresh_token(
 ) -> Result<Option<Uuid>, sqlx::Error> {
     let mut transaction = pool.begin().await?;
     let old_hash = hash_token(refresh_token);
+    let now = timestamp_now();
     let row = sqlx::query_as::<_, (String,)>(
         "SELECT user_id
          FROM oauth_refresh_tokens
-         WHERE token_hash = ?
-           AND client_id = ?
-           AND scope = ?
+         WHERE token_hash = $1
+           AND client_id = $2
+           AND scope = $3
            AND revoked_at IS NULL
-           AND expires_at > strftime('%Y-%m-%dT%H:%M:%fZ', 'now')",
+           AND expires_at > $4",
     )
     .bind(&old_hash)
     .bind(client_id)
     .bind(scope)
+    .bind(now)
     .fetch_optional(&mut *transaction)
     .await?;
     let Some((user_id,)) = row else {
@@ -585,8 +588,8 @@ pub async fn rotate_refresh_token(
     };
     let updated = sqlx::query(
         "UPDATE oauth_refresh_tokens
-         SET revoked_at = ?
-         WHERE token_hash = ? AND revoked_at IS NULL",
+         SET revoked_at = $1
+         WHERE token_hash = $2 AND revoked_at IS NULL",
     )
     .bind(created_at)
     .bind(&old_hash)
@@ -613,29 +616,34 @@ pub async fn rotate_refresh_token(
     Ok(Some(user_id))
 }
 
-pub async fn delete_expired_oauth_records(pool: &SqlitePool) -> Result<(), sqlx::Error> {
+pub async fn delete_expired_oauth_records(pool: &PgPool) -> Result<(), sqlx::Error> {
+    let now = timestamp_now();
     sqlx::query(
         "DELETE FROM oauth_login_requests
-         WHERE expires_at <= strftime('%Y-%m-%dT%H:%M:%fZ', 'now')",
+         WHERE expires_at <= $1",
     )
+    .bind(&now)
     .execute(pool)
     .await?;
     sqlx::query(
         "DELETE FROM oauth_authorization_codes
-         WHERE expires_at <= strftime('%Y-%m-%dT%H:%M:%fZ', 'now')",
+         WHERE expires_at <= $1",
     )
+    .bind(&now)
     .execute(pool)
     .await?;
     sqlx::query(
         "DELETE FROM oauth_access_tokens
-         WHERE expires_at <= strftime('%Y-%m-%dT%H:%M:%fZ', 'now')",
+         WHERE expires_at <= $1",
     )
+    .bind(&now)
     .execute(pool)
     .await?;
     sqlx::query(
         "DELETE FROM oauth_refresh_tokens
-         WHERE expires_at <= strftime('%Y-%m-%dT%H:%M:%fZ', 'now')",
+         WHERE expires_at <= $1",
     )
+    .bind(&now)
     .execute(pool)
     .await?;
     Ok(())
@@ -653,7 +661,7 @@ pub fn timestamp_after(seconds: i64) -> String {
 
 #[allow(clippy::too_many_arguments)]
 async fn insert_token_pair_in_transaction(
-    transaction: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
+    transaction: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     access_token: &str,
     refresh_token: &str,
     client_id: &str,
@@ -666,7 +674,7 @@ async fn insert_token_pair_in_transaction(
     sqlx::query(
         "INSERT INTO oauth_access_tokens
             (token_hash, client_id, user_id, scope, created_at, expires_at)
-         VALUES (?, ?, ?, ?, ?, ?)",
+         VALUES ($1, $2, $3, $4, $5, $6)",
     )
     .bind(hash_token(access_token))
     .bind(client_id)
@@ -679,7 +687,7 @@ async fn insert_token_pair_in_transaction(
     sqlx::query(
         "INSERT INTO oauth_refresh_tokens
             (token_hash, client_id, user_id, scope, created_at, expires_at, revoked_at)
-         VALUES (?, ?, ?, ?, ?, ?, NULL)",
+         VALUES ($1, $2, $3, $4, $5, $6, NULL)",
     )
     .bind(hash_token(refresh_token))
     .bind(client_id)
@@ -692,7 +700,7 @@ async fn insert_token_pair_in_transaction(
     Ok(())
 }
 
-fn stored_activity_from_row(row: SqliteRow) -> Result<StoredActivity, sqlx::Error> {
+fn stored_activity_from_row(row: PgRow) -> Result<StoredActivity, sqlx::Error> {
     let id: String = row.try_get("id")?;
     let owner_id: String = row.try_get("owner_id")?;
     Ok(StoredActivity {

@@ -9,104 +9,208 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as IndexRouteImport } from './routes/index'
-import { Route as HistoryRouteImport } from './routes/history'
-import { Route as UploadRouteImport } from './routes/upload'
-import { Route as ExtractionsIdRouteImport } from './routes/extractions.$id'
+import { Route as AuthenticatedRouteImport } from './routes/_authenticated'
+import { Route as AuthenticatedIndexRouteImport } from './routes/_authenticated.index'
+import { Route as AuthenticatedHistoryRouteImport } from './routes/_authenticated.history'
+import { Route as AuthenticatedUploadRouteImport } from './routes/_authenticated.upload'
+import { Route as ShoesIndexRouteImport } from './routes/shoes.index'
+import { Route as ShoesShoeIdRouteImport } from './routes/shoes.$shoeId'
+import { Route as AuthenticatedAdminTranscriptsRouteImport } from './routes/_authenticated.admin.transcripts'
+import { Route as AuthenticatedExtractionsIdRouteImport } from './routes/_authenticated.extractions.$id'
 
-const IndexRoute = IndexRouteImport.update({
+const AuthenticatedRoute = AuthenticatedRouteImport.update({
+  id: '/_authenticated',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthenticatedIndexRoute = AuthenticatedIndexRouteImport.update({
   id: '/',
   path: '/',
-  getParentRoute: () => rootRouteImport,
+  getParentRoute: () => AuthenticatedRoute,
 } as any)
-const HistoryRoute = HistoryRouteImport.update({
+const AuthenticatedHistoryRoute = AuthenticatedHistoryRouteImport.update({
   id: '/history',
   path: '/history',
-  getParentRoute: () => rootRouteImport,
+  getParentRoute: () => AuthenticatedRoute,
 } as any)
-const UploadRoute = UploadRouteImport.update({
+const AuthenticatedUploadRoute = AuthenticatedUploadRouteImport.update({
   id: '/upload',
   path: '/upload',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
+const ShoesIndexRoute = ShoesIndexRouteImport.update({
+  id: '/shoes/',
+  path: '/shoes/',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ExtractionsIdRoute = ExtractionsIdRouteImport.update({
-  id: '/extractions/$id',
-  path: '/extractions/$id',
+const ShoesShoeIdRoute = ShoesShoeIdRouteImport.update({
+  id: '/shoes/$shoeId',
+  path: '/shoes/$shoeId',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AuthenticatedAdminTranscriptsRoute =
+  AuthenticatedAdminTranscriptsRouteImport.update({
+    id: '/admin/transcripts',
+    path: '/admin/transcripts',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedExtractionsIdRoute =
+  AuthenticatedExtractionsIdRouteImport.update({
+    id: '/extractions/$id',
+    path: '/extractions/$id',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
-  '/': typeof IndexRoute
-  '/history': typeof HistoryRoute
-  '/upload': typeof UploadRoute
-  '/extractions/$id': typeof ExtractionsIdRoute
+  '/': typeof AuthenticatedIndexRoute
+  '/history': typeof AuthenticatedHistoryRoute
+  '/upload': typeof AuthenticatedUploadRoute
+  '/shoes/$shoeId': typeof ShoesShoeIdRoute
+  '/shoes/': typeof ShoesIndexRoute
+  '/admin/transcripts': typeof AuthenticatedAdminTranscriptsRoute
+  '/extractions/$id': typeof AuthenticatedExtractionsIdRoute
 }
 export interface FileRoutesByTo {
-  '/': typeof IndexRoute
-  '/history': typeof HistoryRoute
-  '/upload': typeof UploadRoute
-  '/extractions/$id': typeof ExtractionsIdRoute
+  '/history': typeof AuthenticatedHistoryRoute
+  '/upload': typeof AuthenticatedUploadRoute
+  '/shoes/$shoeId': typeof ShoesShoeIdRoute
+  '/': typeof AuthenticatedIndexRoute
+  '/shoes': typeof ShoesIndexRoute
+  '/admin/transcripts': typeof AuthenticatedAdminTranscriptsRoute
+  '/extractions/$id': typeof AuthenticatedExtractionsIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
-  '/': typeof IndexRoute
-  '/history': typeof HistoryRoute
-  '/upload': typeof UploadRoute
-  '/extractions/$id': typeof ExtractionsIdRoute
+  '/_authenticated': typeof AuthenticatedRouteWithChildren
+  '/_authenticated/history': typeof AuthenticatedHistoryRoute
+  '/_authenticated/upload': typeof AuthenticatedUploadRoute
+  '/shoes/$shoeId': typeof ShoesShoeIdRoute
+  '/_authenticated/': typeof AuthenticatedIndexRoute
+  '/shoes/': typeof ShoesIndexRoute
+  '/_authenticated/admin/transcripts': typeof AuthenticatedAdminTranscriptsRoute
+  '/_authenticated/extractions/$id': typeof AuthenticatedExtractionsIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/history' | '/upload' | '/extractions/$id'
+  fullPaths:
+    | '/'
+    | '/history'
+    | '/upload'
+    | '/shoes/$shoeId'
+    | '/shoes/'
+    | '/admin/transcripts'
+    | '/extractions/$id'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/history' | '/upload' | '/extractions/$id'
-  id: '__root__' | '/' | '/history' | '/upload' | '/extractions/$id'
+  to:
+    | '/history'
+    | '/upload'
+    | '/shoes/$shoeId'
+    | '/'
+    | '/shoes'
+    | '/admin/transcripts'
+    | '/extractions/$id'
+  id:
+    | '__root__'
+    | '/_authenticated'
+    | '/_authenticated/history'
+    | '/_authenticated/upload'
+    | '/shoes/$shoeId'
+    | '/_authenticated/'
+    | '/shoes/'
+    | '/_authenticated/admin/transcripts'
+    | '/_authenticated/extractions/$id'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
-  IndexRoute: typeof IndexRoute
-  HistoryRoute: typeof HistoryRoute
-  UploadRoute: typeof UploadRoute
-  ExtractionsIdRoute: typeof ExtractionsIdRoute
+  AuthenticatedRoute: typeof AuthenticatedRouteWithChildren
+  ShoesShoeIdRoute: typeof ShoesShoeIdRoute
+  ShoesIndexRoute: typeof ShoesIndexRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/': {
-      id: '/'
+    '/_authenticated': {
+      id: '/_authenticated'
+      path: ''
+      fullPath: '/'
+      preLoaderRoute: typeof AuthenticatedRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/_authenticated/': {
+      id: '/_authenticated/'
       path: '/'
       fullPath: '/'
-      preLoaderRoute: typeof IndexRouteImport
-      parentRoute: typeof rootRouteImport
+      preLoaderRoute: typeof AuthenticatedIndexRouteImport
+      parentRoute: typeof AuthenticatedRoute
     }
-    '/history': {
-      id: '/history'
+    '/_authenticated/history': {
+      id: '/_authenticated/history'
       path: '/history'
       fullPath: '/history'
-      preLoaderRoute: typeof HistoryRouteImport
-      parentRoute: typeof rootRouteImport
+      preLoaderRoute: typeof AuthenticatedHistoryRouteImport
+      parentRoute: typeof AuthenticatedRoute
     }
-    '/upload': {
-      id: '/upload'
+    '/_authenticated/upload': {
+      id: '/_authenticated/upload'
       path: '/upload'
       fullPath: '/upload'
-      preLoaderRoute: typeof UploadRouteImport
+      preLoaderRoute: typeof AuthenticatedUploadRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/shoes/': {
+      id: '/shoes/'
+      path: '/shoes'
+      fullPath: '/shoes/'
+      preLoaderRoute: typeof ShoesIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/extractions/$id': {
-      id: '/extractions/$id'
+    '/shoes/$shoeId': {
+      id: '/shoes/$shoeId'
+      path: '/shoes/$shoeId'
+      fullPath: '/shoes/$shoeId'
+      preLoaderRoute: typeof ShoesShoeIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/_authenticated/admin/transcripts': {
+      id: '/_authenticated/admin/transcripts'
+      path: '/admin/transcripts'
+      fullPath: '/admin/transcripts'
+      preLoaderRoute: typeof AuthenticatedAdminTranscriptsRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/extractions/$id': {
+      id: '/_authenticated/extractions/$id'
       path: '/extractions/$id'
       fullPath: '/extractions/$id'
-      preLoaderRoute: typeof ExtractionsIdRouteImport
-      parentRoute: typeof rootRouteImport
+      preLoaderRoute: typeof AuthenticatedExtractionsIdRouteImport
+      parentRoute: typeof AuthenticatedRoute
     }
   }
 }
 
+interface AuthenticatedRouteChildren {
+  AuthenticatedHistoryRoute: typeof AuthenticatedHistoryRoute
+  AuthenticatedUploadRoute: typeof AuthenticatedUploadRoute
+  AuthenticatedIndexRoute: typeof AuthenticatedIndexRoute
+  AuthenticatedAdminTranscriptsRoute: typeof AuthenticatedAdminTranscriptsRoute
+  AuthenticatedExtractionsIdRoute: typeof AuthenticatedExtractionsIdRoute
+}
+
+const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
+  AuthenticatedHistoryRoute: AuthenticatedHistoryRoute,
+  AuthenticatedUploadRoute: AuthenticatedUploadRoute,
+  AuthenticatedIndexRoute: AuthenticatedIndexRoute,
+  AuthenticatedAdminTranscriptsRoute: AuthenticatedAdminTranscriptsRoute,
+  AuthenticatedExtractionsIdRoute: AuthenticatedExtractionsIdRoute,
+}
+
+const AuthenticatedRouteWithChildren = AuthenticatedRoute._addFileChildren(
+  AuthenticatedRouteChildren,
+)
+
 const rootRouteChildren: RootRouteChildren = {
-  IndexRoute: IndexRoute,
-  HistoryRoute: HistoryRoute,
-  UploadRoute: UploadRoute,
-  ExtractionsIdRoute: ExtractionsIdRoute,
+  AuthenticatedRoute: AuthenticatedRouteWithChildren,
+  ShoesShoeIdRoute: ShoesShoeIdRoute,
+  ShoesIndexRoute: ShoesIndexRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

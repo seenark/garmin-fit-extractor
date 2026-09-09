@@ -1,9 +1,9 @@
-# Design — Garmin FIT Extractor
+# Design — Runner’s Garage
 
-A shared Hallmark design system for the authenticated app surfaces. The
-homepage, upload, and history are one product, so they share type, color,
-spacing, navigation, and interaction rules rather than rotating through
-separate page themes.
+A shared Hallmark design system for the Runner’s Garage surfaces. Runs and Shoes
+are separate product areas inside one practical garage, so they share type,
+color, spacing, navigation, and interaction rules without pretending their jobs
+are the same.
 
 ## Genre
 
@@ -14,19 +14,20 @@ blue reserved for focus.
 
 ## Macrostructure family
 
-- Authenticated homepage: **Narrative Workflow**. The homepage explains the
-  real Garmin export → FIT extraction → normalized/raw JSON → AI handoff path,
-  then gives the user clear routes to Upload and History. It may orient and
-  persuade with product-specific proof, but it does not invent stats,
-  testimonials, or decorative marketing sections.
-- App pages: **Workbench**. Upload is action-led with a primary intake surface
+- Homepage: **Garage Entrance**. The homepage names Runner’s Garage in one
+  memorable frame, then lets the visitor choose independently between the Runs
+  workspace and the Shoes library. It proves the actual product paths without
+  inventing metrics, testimonials, or a story that links unrelated jobs.
+- Runs pages: **Workbench**. Upload is action-led with a primary intake surface
   and a factual constraints panel. History is data-led with a live record
   count, order control, destructive clear action, and a responsive data surface.
-- Content pages: not applicable.
-App pages may vary their composition within Workbench. The homepage uses a
-workflow diagram and stage proofs because the workflow itself is the product
-story; it does not add invented stats, decorative imagery, or generic
-promotional sections. Function carries every page.
+- Shoes pages: **Evidence Workbench**. Catalog pages help a runner find a shoe;
+  detail pages lead with the reference comparison task, then expose the evidence
+  and chart used to interpret it.
+
+The shared system keeps the shell calm and recognizable. Each product area can
+vary its composition within its own task, but neither is allowed to borrow
+claims from the other.
 
 ## Theme
 
@@ -104,31 +105,32 @@ Motion is functional and quiet.
 
 ## CTA voice
 
-Primary actions use short, concrete verbs: `Upload ZIP files`, `Open`,
+Primary actions use short, concrete verbs: `เพิ่มข้อมูลวิ่ง`, `Open`, `Compare sizes`,
 `Delete`, and `Clear history`. Secondary actions use equally direct labels:
-`Choose files`, `Previous`, `Next`, and `Cancel`. Navigation stays short:
-`Home`, `Upload`, `History`, and `Sign out`. Avoid hype, invented metrics, and
+`Choose files`, `Previous`, `Next`, and `Cancel`. Navigation is intentionally
+short: `Runs`, `Shoes`, and `เพิ่มข้อมูลวิ่ง`. Avoid hype, invented metrics, and
 generic success language.
 
 ## Navigation and app chrome
 
-The authenticated shell uses an N5-inspired detached floating pill: wordmark,
-short navigation links, signed-in identity, and sign-out action stay in one
-compact shared bar. At touch widths the bar becomes a two-row grid so labels
-remain single-line while all existing functions remain available. No fake links
-or decorative footer are added.
+The shared shell uses an N5-inspired detached floating pill: the Runner’s
+Garage wordmark and byline, short navigation links, signed-in identity, and
+sign-out action stay in one compact shared bar. The primary navigation is
+`Runs`, `Shoes`, and `เพิ่มข้อมูลวิ่ง`; there is no separate Home or Garmin/FIT brand
+link. At touch widths the bar becomes a two-row grid so labels remain
+single-line while all existing functions remain available.
 
 ## Responsive allowances
 
 The system is mobile-first and verified at 320, 375, 414, and 768px. Root
-`html` and `body` use `overflow-x: clip`. The homepage collapses its split
-hero and workflow stages into one readable column while keeping both primary
-routes visible. Upload work surfaces collapse from primary surface +
+`html` and `body` use `overflow-x: clip`. The homepage collapses its garage
+workbench and independent product areas into one readable column while keeping
+both routes visible. Upload work surfaces collapse from primary surface +
 constraints panel to a single column. History keeps a real `table` and real
 `td` order in the DOM, then presents each row as a readable stacked card below
-the content breakpoint. Activity date and Activity type cells remain visible
-on mobile. Table cells use `min-width: 0` and long filenames can break inside
-their content without making the document scroll.
+the content breakpoint. Shoe detail keeps the size task above evidence and
+charts; table cells use `min-width: 0` and long names can break inside their
+content without making the document scroll.
 
 App pages may use cards, bordered data surfaces, semantic status badges, and
 technical metadata. They may not use decorative imagery, fake browser chrome,

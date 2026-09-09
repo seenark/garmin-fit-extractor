@@ -20,3 +20,14 @@ test-results
 **/test-results
 *.fit
 **/*.fit
+db-data
+db-data/**
+migration-artifacts
+migration-artifacts/**
+*.dump
+*.dump.*
+*.sql.gz
+**/migration-plan-*.md
+**/implementation-*.log
+**/garmin-fit-extractor-repo
+**/running-shoe-size-advisor

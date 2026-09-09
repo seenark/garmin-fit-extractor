@@ -3,14 +3,16 @@ import { useState } from "react";
 
 import { BatchResults } from "../components/batch-results";
 import { UploadDropzone } from "../components/upload-dropzone";
-import { ApiError, createExtractions } from "../lib/api";
+import { ApiError, createExtractions, startGoogleLogin } from "../lib/api";
 import type { BatchCreateResponse } from "../lib/api-types";
 import { formatApiError } from "../lib/copy";
+import { Route as RootRoute } from "./__root";
 
-export const Route = createFileRoute("/upload")({ component: UploadPage });
+export const Route = createFileRoute("/_authenticated/upload")({ component: UploadPage });
 
 function UploadPage() {
   const router = useRouter();
+  const { user } = RootRoute.useLoaderData();
   const [files, setFiles] = useState<File[]>([]);
   const [result, setResult] = useState<BatchCreateResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -147,12 +149,28 @@ function UploadPage() {
       </section>
 
       <div className="workbench-grid">
-        <UploadDropzone
-          files={files}
-          disabled={uploading}
-          onFilesChange={handleFilesChange}
-          onSubmit={submit}
-        />
+        {user ? (
+          <UploadDropzone
+            files={files}
+            disabled={uploading}
+            onFilesChange={handleFilesChange}
+            onSubmit={submit}
+          />
+        ) : (
+          <section className="card upload-access-card" aria-labelledby="upload-access-title">
+            <div>
+              <p className="upload-access-label">พร้อมอัปโหลดเมื่อคุณพร้อม</p>
+              <h2 id="upload-access-title">อ่าน guide ได้ก่อน โดยยังไม่ต้องเข้าสู่ระบบ</h2>
+              <p>
+                เมื่อมีไฟล์ ZIP จาก Garmin Connect แล้ว ค่อยเข้าสู่ระบบด้วย Google
+                เพื่อเลือกไฟล์และเริ่มแยกข้อมูล FIT
+              </p>
+            </div>
+            <button type="button" onClick={startGoogleLogin}>
+              เข้าสู่ระบบเพื่ออัปโหลด
+            </button>
+          </section>
+        )}
         <aside className="constraints-panel" aria-labelledby="constraints-title">
           <h2 id="constraints-title">ข้อกำหนดการอัปโหลด</h2>
           <p>ไฟล์ ZIP ต้นฉบับจะถูกเก็บเป็นส่วนตัว ไฟล์ FIT ที่แยกออกมาจะถูกลบทิ้งหลังประมวลผล</p>

@@ -7,13 +7,14 @@
     "dev": "vite",
     "build": "vite build",
     "check": "tsc --noEmit",
-    "test": "bun test src/lib/*.test.ts"
+    "test": "bun test src/lib/*.test.ts src/domain/*.test.ts src/data/*.test.ts src/api/*.test.ts"
   },
   "dependencies": {
     "@tanstack/charts": "0.16.0",
     "@tanstack/react-router": "^1.170.17",
     "react": "^19.2.7",
-    "react-dom": "^19.2.7"
+    "react-dom": "^19.2.7",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@tanstack/router-plugin": "^1.168.19",

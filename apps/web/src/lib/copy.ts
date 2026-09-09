@@ -31,6 +31,10 @@ const apiErrorMessages: Record<string, string> = {
   INVALID_ACTIVITY_DETAIL: "รายละเอียดกิจกรรมที่ขอไม่ถูกต้อง",
   COACH_PROCESSING_ERROR: "ระบบประมวลผลกิจกรรมไม่สำเร็จ",
   NO_FIT_FILES: "ใน ZIP นี้ไม่พบไฟล์ FIT",
+  ADMIN_FORBIDDEN: "บัญชีนี้ไม่มีสิทธิ์เข้าถึงข้อมูลภายใน",
+  INVALID_TRANSCRIPT_ENTRY: "ข้อมูลรายการถอดเสียงไม่ถูกต้อง",
+  TRANSCRIPT_DUPLICATE_VIDEO: "Video ID นี้มีอยู่ในคิวแล้ว",
+  TRANSCRIPT_NOT_FOUND: "ไม่พบรายการถอดเสียงที่ต้องการ",
 };
 
 export function formatApiError(

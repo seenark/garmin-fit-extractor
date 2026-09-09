@@ -3,7 +3,6 @@ import {
   Outlet,
   createRootRoute,
   useRouter,
-  useRouterState,
 } from "@tanstack/react-router";
 import { useState } from "react";
 import { ApiError, getCurrentUser, logout, startGoogleLogin } from "../lib/api";
@@ -21,7 +20,7 @@ export const Route = createRootRoute({
       return await getCurrentUser();
     } catch (error) {
       if (error instanceof ApiError && error.code === "AUTH_REQUIRED") {
-        return { user: null };
+        return { user: null, isAdmin: false };
       }
       throw error;
     }
@@ -47,61 +46,91 @@ export const Route = createRootRoute({
     ),
 });
 
-function SignInScreen({ authError = false }: { authError?: boolean }) {
+interface SignInScreenProps {
+  authError?: boolean;
+  eyebrow?: string;
+  title?: string;
+  description?: string;
+}
+
+export function SignInScreen({
+  authError = false,
+  eyebrow = "RUNS / ข้อมูลการวิ่ง",
+  title = "เปิดข้อมูลวิ่งของคุณ",
+  description = "เข้าสู่ระบบเพื่อเพิ่มข้อมูลวิ่งและกลับไปดูข้อมูลที่บันทึกไว้",
+}: SignInScreenProps) {
   return (
     <main className="shell auth-shell">
-      <section className="card auth-card">
-        <span className="brand-mark" aria-hidden="true">FIT</span>
-        <h1>Garmin FIT Extractor</h1>
-        <p>เข้าสู่ระบบด้วย Google เพื่อไปต่อ</p>
-        {authError ? (
-          <p className="error" role="alert">
-            <span>เข้าสู่ระบบด้วย Google ไม่สำเร็จ ลองใหม่อีกครั้ง</span>
-          </p>
-        ) : null}
-        <button type="button" onClick={startGoogleLogin}>
-          เข้าสู่ระบบด้วย Google
-        </button>
-      </section>
+      <div className="auth-gate">
+        <div className="auth-context">
+          <p className="auth-eyebrow">{eyebrow}</p>
+          <h1>{title}</h1>
+          <p>{description}</p>
+        </div>
+        <section className="card auth-card" aria-labelledby="auth-card-title">
+          <div className="auth-card-brand">
+            <span className="brand-mark" aria-hidden="true">RG</span>
+            <div>
+              <p className="auth-brand-byline">by น้ำเน่ารันคลับ</p>
+              <span className="auth-card-product">Runner’s Garage</span>
+            </div>
+          </div>
+          <h2 id="auth-card-title">เข้าสู่ระบบเพื่อไปต่อ</h2>
+          <p className="auth-card-description">ใช้ Google เพื่อเข้าถึงข้อมูล Runs ของคุณ</p>
+          {authError ? (
+            <p className="error" role="alert">
+              <span>เข้าสู่ระบบด้วย Google ไม่สำเร็จ ลองใหม่อีกครั้ง</span>
+            </p>
+          ) : null}
+          <div className="auth-actions">
+            <button type="button" onClick={startGoogleLogin}>
+              เข้าสู่ระบบด้วย Google
+            </button>
+            <Link className="button quiet" to="/">
+              กลับหน้าหลัก
+            </Link>
+          </div>
+        </section>
+      </div>
     </main>
   );
 }
 
 function RootLayout() {
-  const user = Route.useLoaderData().user;
-  const search = Route.useSearch();
+  const currentUser = Route.useLoaderData();
+  const user = currentUser.user;
   const router = useRouter();
-  const pathname = useRouterState({
-    select: (state) => state.location.pathname,
-  });
   const [busy, setBusy] = useState(false);
-  const isPublicHome = pathname === "/" && search.authError !== "AUTH_FAILED";
-
-  if (!user && !isPublicHome) {
-    return <SignInScreen authError={search.authError === "AUTH_FAILED"} />;
-  }
 
   return (
     <div className="shell">
       <header className="site-header">
-        <Link className="brand" to="/">
-          <span className="brand-mark" aria-hidden="true">FIT</span>
-          <span className="brand-text">Garmin FIT Extractor</span>
+        <Link className="brand" to="/" aria-label="Runner’s Garage กลับหน้าหลัก">
+          <span className="brand-mark" aria-hidden="true">RG</span>
+          <span className="brand-lockup">
+            <span className="brand-text">Runner’s Garage</span>
+            <span className="brand-byline">by น้ำเน่ารันคลับ</span>
+          </span>
         </Link>
         <nav aria-label="เมนูหลัก">
-          <Link to="/" activeProps={{ "aria-current": "page" }}>
-            หน้าหลัก
-          </Link>
-          <Link to="/upload" activeProps={{ "aria-current": "page" }}>
-            อัปโหลด
-          </Link>
           <Link
             to="/history"
             search={{ offset: 0, order: "desc" }}
             activeProps={{ "aria-current": "page" }}
           >
-            ประวัติ
+            Runs
           </Link>
+          <Link to="/shoes" activeProps={{ "aria-current": "page" }}>
+            Shoes
+          </Link>
+          <Link className="nav-add-run" to="/upload">
+            เพิ่มข้อมูลวิ่ง
+          </Link>
+          {currentUser.isAdmin ? (
+            <Link to="/admin/transcripts" activeProps={{ "aria-current": "page" }}>
+              Admin queue
+            </Link>
+          ) : null}
         </nav>
         <div className="account-area">
           {user ? (

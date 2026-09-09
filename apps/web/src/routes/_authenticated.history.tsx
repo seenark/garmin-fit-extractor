@@ -11,7 +11,7 @@ import {
 import type { ExtractionSummary } from "../lib/api-types";
 import { formatApiError } from "../lib/copy";
 
-export const Route = createFileRoute("/history")({
+export const Route = createFileRoute("/_authenticated/history")({
   validateSearch: (search: Record<string, unknown>) => ({
     offset:
       typeof search.offset === "number" &&

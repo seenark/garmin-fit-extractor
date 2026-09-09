@@ -7,7 +7,7 @@ use axum::{
     routing::get,
 };
 use serde::Serialize;
-use sqlx::SqlitePool;
+use sqlx::PgPool;
 use std::path::PathBuf;
 use std::sync::Arc;
 use tower_http::{
@@ -17,8 +17,9 @@ use tower_http::{
 };
 #[derive(Clone)]
 pub struct AppState {
-    pub db: SqlitePool,
+    pub db: PgPool,
     pub auth: Arc<AuthState>,
+    pub app_origin: Option<String>,
 }
 
 pub fn router(state: AppState, static_dir: PathBuf) -> Router {

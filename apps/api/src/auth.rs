@@ -9,8 +9,8 @@ use openidconnect::{
 };
 use reqwest::Client;
 use sha2::{Digest, Sha256};
-use sqlx::SqlitePool;
-use std::time::Duration as StdDuration;
+use sqlx::PgPool;
+use std::{collections::HashSet, time::Duration as StdDuration};
 use tokio::sync::OnceCell;
 use uuid::Uuid;
 
@@ -39,6 +39,7 @@ pub struct AuthState {
     pub coach_oauth: Option<CoachOAuthConfig>,
     pub client: Client,
     pub oidc_client: OnceCell<GoogleClient>,
+    pub admin_emails: HashSet<String>,
 }
 
 impl AuthState {
@@ -54,7 +55,25 @@ impl AuthState {
             coach_oauth,
             client,
             oidc_client: OnceCell::new(),
+            admin_emails: HashSet::new(),
         }
+    }
+
+    pub fn with_admin_emails<I>(mut self, emails: I) -> Self
+    where
+        I: IntoIterator<Item = String>,
+    {
+        self.admin_emails = emails
+            .into_iter()
+            .map(|email| email.trim().to_ascii_lowercase())
+            .filter(|email| !email.is_empty())
+            .collect();
+        self
+    }
+
+    pub fn is_admin_email(&self, email: &str) -> bool {
+        self.admin_emails
+            .contains(&email.trim().to_ascii_lowercase())
     }
 
     pub async fn oidc_client(&self) -> Result<&GoogleClient, ApiError> {
@@ -174,11 +193,13 @@ impl FromRequestParts<AppState> for CoachAuthenticatedUser {
     }
 }
 
-pub async fn session_user(pool: &SqlitePool, token: &str) -> Result<Option<UserProfile>, ApiError> {
+pub async fn session_user(pool: &PgPool, token: &str) -> Result<Option<UserProfile>, ApiError> {
+    let now = db::timestamp_now();
     sqlx::query(
         "DELETE FROM sessions
-         WHERE expires_at <= strftime('%Y-%m-%dT%H:%M:%fZ', 'now')",
+         WHERE expires_at <= $1",
     )
+    .bind(&now)
     .execute(pool)
     .await
     .map_err(|_| ApiError::service_unavailable())?;
@@ -187,10 +208,11 @@ pub async fn session_user(pool: &SqlitePool, token: &str) -> Result<Option<UserP
         "SELECT u.id, u.email, u.display_name
          FROM sessions AS s
          JOIN users AS u ON u.id = s.user_id
-         WHERE s.token_hash = ?
-           AND s.expires_at > strftime('%Y-%m-%dT%H:%M:%fZ', 'now')",
+         WHERE s.token_hash = $1
+           AND s.expires_at > $2",
     )
     .bind(hash_token(token))
+    .bind(&now)
     .fetch_optional(pool)
     .await
     .map_err(|_| ApiError::service_unavailable())?;
@@ -212,4 +234,18 @@ pub fn hash_token(value: &str) -> String {
         .iter()
         .map(|byte| format!("{byte:02x}"))
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::AuthState;
+
+    #[test]
+    fn admin_allowlist_matches_trimmed_ascii_lowercase_emails() {
+        let auth = AuthState::new(None, None).with_admin_emails([" ADMIN@Example.COM ".to_owned()]);
+        assert!(auth.is_admin_email("admin@example.com"));
+        assert!(auth.is_admin_email(" ADMIN@EXAMPLE.COM "));
+        assert!(!auth.is_admin_email("other@example.com"));
+        assert!(!AuthState::new(None, None).is_admin_email("admin@example.com"));
+    }
 }

@@ -8,7 +8,7 @@ use axum::{
     response::{IntoResponse, Response},
     routing::{get, post},
 };
-use sqlx::SqlitePool;
+use sqlx::PgPool;
 use tokio::task;
 use uuid::Uuid;
 
@@ -343,7 +343,7 @@ fn preflight_archive(bytes: Vec<u8>, archive_name: String) -> Result<Vec<MemberR
 }
 
 async fn insert_failure(
-    pool: &SqlitePool,
+    pool: &PgPool,
     user_id: Uuid,
     file_name: String,
     file_size_bytes: u64,
@@ -571,11 +571,7 @@ fn parse_id(id: &str) -> Result<Uuid, ApiError> {
     Uuid::parse_str(id).map_err(|_| ApiError::invalid_id())
 }
 
-async fn get_stored(
-    pool: &SqlitePool,
-    user_id: Uuid,
-    id: &str,
-) -> Result<StoredExtraction, ApiError> {
+async fn get_stored(pool: &PgPool, user_id: Uuid, id: &str) -> Result<StoredExtraction, ApiError> {
     db::get_stored(pool, user_id, parse_id(id)?)
         .await
         .map_err(|_| ApiError::database_error())?

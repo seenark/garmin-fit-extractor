@@ -1,7 +1,7 @@
 export type ExtractionStatus = "succeeded" | "failed";
 
 export interface UserProfile { id: string; email: string; displayName: string | null; }
-export interface CurrentUserResponse { user: UserProfile | null; }
+export interface CurrentUserResponse { user: UserProfile | null; isAdmin: boolean; }
 
 export interface Metric { value: number | null; unit: string; }
 export interface Calories { value: number | null; unit: "kcal"; }

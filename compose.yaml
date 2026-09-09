@@ -1,7 +1,30 @@
 name: garmin-fit-extractor
 
 services:
-  app:
+  postgres:
+    image: postgres:18
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:?POSTGRES_DB is required}
+      POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER is required}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./db-data:/var/lib/postgresql
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+    networks:
+      - intranet
+
+  garmin-fit-extractor:
     image: ${GARMIN_FIT_IMAGE:-hadesgod/garmin-fit-extractor}:${GARMIN_FIT_TAG:-latest}
     platform: linux/amd64
     build:
@@ -11,7 +34,9 @@ services:
       - "${GARMIN_FIT_PORT:-8100}:3000"
     environment:
       GARMIN_FIT_BIND: ${GARMIN_FIT_BIND:-0.0.0.0:3000}
-      GARMIN_FIT_DATABASE_URL: ${GARMIN_FIT_DATABASE_URL:-sqlite:///data/garmin-fit-extractor.sqlite3}
+      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required}
+      ADMIN_EMAILS: ${ADMIN_EMAILS:-}
+      GARMIN_FIT_APP_ORIGIN: ${GARMIN_FIT_APP_ORIGIN:-}
       GARMIN_FIT_STATIC_DIR: ${GARMIN_FIT_STATIC_DIR:-/app/public}
       GARMIN_FIT_GOOGLE_CLIENT_ID: ${GARMIN_FIT_GOOGLE_CLIENT_ID:-}
       GARMIN_FIT_GOOGLE_CLIENT_SECRET: ${GARMIN_FIT_GOOGLE_CLIENT_SECRET:-}
@@ -20,11 +45,14 @@ services:
       GARMIN_FIT_CHATGPT_CLIENT_SECRET: ${GARMIN_FIT_CHATGPT_CLIENT_SECRET:-}
       GARMIN_FIT_CHATGPT_REDIRECT_URI: ${GARMIN_FIT_CHATGPT_REDIRECT_URI:-}
       RUST_LOG: ${RUST_LOG:-info}
-    volumes:
-      - garmin_fit_data:/data
+    depends_on:
+      postgres:
+        condition: service_healthy
     restart: unless-stopped
     stop_grace_period: 30s
+    networks:
+      - intranet
 
-volumes:
-  garmin_fit_data:
-    name: garmin_fit_data
+networks:
+  intranet:
+    name: intranet

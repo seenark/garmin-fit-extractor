@@ -1,11 +1,4 @@
-use std::{
-    io::Write,
-    path::PathBuf,
-    sync::{
-        Arc,
-        atomic::{AtomicU64, Ordering},
-    },
-};
+use std::{io::Write, path::PathBuf, sync::Arc};
 
 use axum::{
     body::{Body, to_bytes},
@@ -24,8 +17,6 @@ use uuid::Uuid;
 const TEST_TOKEN: &str = "http-test-session-token";
 const TEST_USER: Uuid = Uuid::from_u128(1);
 
-static NEXT_DATABASE: AtomicU64 = AtomicU64::new(0);
-
 async fn test_app() -> axum::Router {
     test_app_with_static(PathBuf::from("apps/web/dist")).await
 }
@@ -35,17 +26,31 @@ async fn test_app_with_static(static_dir: PathBuf) -> axum::Router {
     app
 }
 
-async fn test_app_with_static_and_db(static_dir: PathBuf) -> (axum::Router, sqlx::SqlitePool) {
-    let nonce = NEXT_DATABASE.fetch_add(1, Ordering::Relaxed);
-    let database_path = std::env::temp_dir().join(format!(
-        "garmin-fit-extractor-http-{}-{nonce}.sqlite3",
-        std::process::id()
-    ));
-    let database_url = format!("sqlite://{}", database_path.display());
+async fn test_app_with_static_and_db(static_dir: PathBuf) -> (axum::Router, sqlx::PgPool) {
+    let database_url = std::env::var("TEST_DATABASE_URL")
+        .expect("TEST_DATABASE_URL must point to a PostgreSQL test database");
     let db = db::connect(&database_url).await.expect("database connects");
     sqlx::query(
+        "TRUNCATE TABLE
+            transcript_entries,
+            legacy_imports,
+            oauth_refresh_tokens,
+            oauth_access_tokens,
+            oauth_authorization_codes,
+            oauth_login_requests,
+            oauth_states,
+            activities,
+            extractions,
+            sessions,
+            users
+         RESTART IDENTITY CASCADE",
+    )
+    .execute(&db)
+    .await
+    .expect("test database should reset");
+    sqlx::query(
         "INSERT INTO users (id, google_subject, email, display_name, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?)",
+         VALUES ($1, $2, $3, $4, $5, $6)",
     )
     .bind(TEST_USER.to_string())
     .bind("test:http")
@@ -58,7 +63,7 @@ async fn test_app_with_static_and_db(static_dir: PathBuf) -> (axum::Router, sqlx
     .expect("test user should persist");
     sqlx::query(
         "INSERT INTO sessions (token_hash, user_id, created_at, expires_at)
-         VALUES (?, ?, ?, ?)",
+         VALUES ($1, $2, $3, $4)",
     )
     .bind(hash_token(TEST_TOKEN))
     .bind(TEST_USER.to_string())
@@ -78,6 +83,7 @@ async fn test_app_with_static_and_db(static_dir: PathBuf) -> (axum::Router, sqlx
                     redirect_uri: "https://chatgpt.test/oauth/callback".to_owned(),
                 }),
             )),
+            app_origin: Some("http://127.0.0.1:5173".to_owned()),
         },
         static_dir,
     );
@@ -632,10 +638,8 @@ async fn returns_json_404_for_unknown_api_route() {
 
 #[tokio::test]
 async fn serves_index_for_non_api_client_routes() {
-    let static_dir = std::env::temp_dir().join(format!(
-        "garmin-fit-extractor-static-{}",
-        NEXT_DATABASE.fetch_add(1, Ordering::Relaxed)
-    ));
+    let static_dir =
+        std::env::temp_dir().join(format!("garmin-fit-extractor-static-{}", Uuid::now_v7()));
     std::fs::create_dir_all(&static_dir).expect("static directory");
     std::fs::write(static_dir.join("index.html"), "<main>FIT app</main>").expect("index file");
     let app = test_app_with_static(static_dir).await;
@@ -683,7 +687,7 @@ async fn serves_index_for_non_api_client_routes() {
 }
 
 #[tokio::test]
-async fn healthz_pings_sqlite_and_returns_ok() {
+async fn healthz_pings_postgres_and_returns_ok() {
     let app = test_app().await;
     let response = app
         .oneshot(

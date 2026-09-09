@@ -16,13 +16,17 @@
 ```sh
 export GARMIN_FIT_TEST_AUTH=true
 export GARMIN_FIT_BIND=127.0.0.1:3000
-export GARMIN_FIT_DATABASE_URL=sqlite:///tmp/garmin-fit-local.sqlite3
+export POSTGRES_DB=garmin_fit_local
+export POSTGRES_USER=garmin_fit_local
+export POSTGRES_PASSWORD=REPLACE_WITH_URL_SAFE_PASSWORD
+export DATABASE_URL=postgresql://garmin_fit_local:REPLACE_WITH_URL_SAFE_PASSWORD@127.0.0.1:5432/garmin_fit_local
 export GARMIN_FIT_GOOGLE_CLIENT_ID=
 export GARMIN_FIT_GOOGLE_CLIENT_SECRET=
 export GARMIN_FIT_GOOGLE_REDIRECT_URI=
 export GARMIN_FIT_CHATGPT_CLIENT_ID=
 export GARMIN_FIT_CHATGPT_CLIENT_SECRET=
 export GARMIN_FIT_CHATGPT_REDIRECT_URI=
+docker compose up -d postgres
 bun run build
 
 cargo run -p garmin-fit-extractor-api
@@ -125,4 +129,4 @@ https://REPLACE_WITH_HOST/api/v1/auth/callback
 
 ตั้ง `GARMIN_FIT_GOOGLE_CLIENT_ID`, `GARMIN_FIT_GOOGLE_CLIENT_SECRET` และ `GARMIN_FIT_GOOGLE_REDIRECT_URI` ให้ตรงกันทั้งหมด แล้วตรวจผ่าน browser ที่ `https://REPLACE_WITH_HOST/`. ต้องไม่ใช้ HTTP หรือ localhost เป็น callback ของ production-like tunnel. Cloudflare tunnel ต้องส่ง hostname เดียวกันมายัง app port 3000.
 
-ChatGPT ยังไม่เกี่ยวข้องกับการตรวจนี้: ตัวแปร ChatGPT ทั้งชุดปล่อยว่างได้ และ upload/history ของเว็บยังใช้ Google session ได้ตามปกติ
+หลังทดสอบเสร็จหยุด service ด้วย `docker compose stop garmin-fit-extractor postgres` และเก็บ `db-data` ไว้หากต้องตรวจซ้ำ. ChatGPT ยังไม่เกี่ยวข้องกับการตรวจนี้: ตัวแปร ChatGPT ทั้งชุดปล่อยว่างได้ และ upload/history ของเว็บยังใช้ Google session ได้ตามปกติ

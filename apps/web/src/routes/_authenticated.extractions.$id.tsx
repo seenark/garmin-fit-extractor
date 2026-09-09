@@ -8,7 +8,7 @@ import { ApiError, downloadExtraction, getExtraction } from "../lib/api";
 import { formatApiError } from "../lib/copy";
 import { formatDateTime } from "../lib/formatters";
 
-export const Route = createFileRoute("/extractions/$id")({
+export const Route = createFileRoute("/_authenticated/extractions/$id")({
   validateSearch: (search: Record<string, unknown>) => ({
     offset:
       typeof search.offset === "number" &&

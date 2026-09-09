@@ -1,17 +1,12 @@
-use std::path::PathBuf;
-
 use garmin_fit_extractor_api::{
     db::{self, HistoryOrder, NewFailure, NewSuccess},
     model::ExtractionStatus,
 };
 use sqlx::Row;
 
-fn temporary_database_url() -> (PathBuf, String) {
-    let directory = std::env::temp_dir().join(format!("garmin-fit-db-{}", uuid::Uuid::now_v7()));
-    std::fs::create_dir_all(&directory).expect("temporary directory should be created");
-    let path = directory.join("extractions.sqlite3");
-    let url = format!("sqlite://{}", path.display());
-    (directory, url)
+fn temporary_database_url() -> String {
+    std::env::var("TEST_DATABASE_URL")
+        .expect("TEST_DATABASE_URL must point to a PostgreSQL test database")
 }
 fn test_user(slug: &str) -> uuid::Uuid {
     uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_URL, slug.as_bytes())
@@ -42,11 +37,11 @@ fn failure(file_name: &str) -> NewFailure {
         error_message: "File is not a valid FIT file or failed its integrity check.".into(),
     }
 }
-async fn seed_user(pool: &sqlx::SqlitePool, slug: &str) {
+async fn seed_user(pool: &sqlx::PgPool, slug: &str) {
     let user_id = test_user(slug);
     sqlx::query(
         "INSERT INTO users (id, google_subject, email, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?)",
+         VALUES ($1, $2, $3, $4, $5)",
     )
     .bind(user_id.to_string())
     .bind(format!("test:{slug}"))
@@ -57,13 +52,34 @@ async fn seed_user(pool: &sqlx::SqlitePool, slug: &str) {
     .await
     .expect("test user should persist");
 }
+async fn reset_database(pool: &sqlx::PgPool) {
+    sqlx::query(
+        "TRUNCATE TABLE
+            transcript_entries,
+            legacy_imports,
+            oauth_refresh_tokens,
+            oauth_access_tokens,
+            oauth_authorization_codes,
+            oauth_login_requests,
+            oauth_states,
+            activities,
+            extractions,
+            sessions,
+            users
+         RESTART IDENTITY CASCADE",
+    )
+    .execute(pool)
+    .await
+    .expect("test database should reset");
+}
 
 #[tokio::test]
 async fn migrates_and_persists_success_and_failure_with_their_required_shapes() {
-    let (directory, url) = temporary_database_url();
+    let url = temporary_database_url();
     let pool = db::connect(&url)
         .await
         .expect("database should connect and migrate");
+    reset_database(&pool).await;
     seed_user(&pool, "default").await;
 
     let succeeded = db::insert_success(&pool, success("morning.fit"))
@@ -115,17 +131,15 @@ async fn migrates_and_persists_success_and_failure_with_their_required_shapes() 
         .expect("failed row should exist");
     assert!(failed_stored.normalized_json.is_none());
     assert!(failed_stored.raw_json.is_none());
-
-    drop(pool);
-    std::fs::remove_dir_all(directory).expect("temporary directory should be removed");
 }
 
 #[tokio::test]
 async fn lists_summaries_in_fixed_width_descending_timestamp_order_without_json_blobs() {
-    let (directory, url) = temporary_database_url();
+    let url = temporary_database_url();
     let pool = db::connect(&url)
         .await
         .expect("database should connect and migrate");
+    reset_database(&pool).await;
     seed_user(&pool, "default").await;
     seed_user(&pool, "other").await;
     let first = db::insert_success(&pool, success("first.fit"))
@@ -144,14 +158,14 @@ async fn lists_summaries_in_fixed_width_descending_timestamp_order_without_json_
     .await
     .expect("other-user extraction should persist");
 
-    sqlx::query("UPDATE extractions SET created_at = ?, activity_date = ? WHERE id = ?")
+    sqlx::query("UPDATE extractions SET created_at = $1, activity_date = $2 WHERE id = $3")
         .bind("2026-07-27T10:00:00.000Z")
         .bind("2026-07-28T10:00:00.000Z")
         .bind(first.id.to_string())
         .execute(&pool)
         .await
         .expect("first timestamp should be controlled");
-    sqlx::query("UPDATE extractions SET created_at = ?, activity_date = ? WHERE id = ?")
+    sqlx::query("UPDATE extractions SET created_at = $1, activity_date = $2 WHERE id = $3")
         .bind("2026-07-27T10:00:00.500Z")
         .bind("2026-07-27T10:00:00.000Z")
         .bind(second.id.to_string())
@@ -189,7 +203,7 @@ async fn lists_summaries_in_fixed_width_descending_timestamp_order_without_json_
     assert_eq!(other_page.items[0].id, other.id);
 
     let blobs_selected =
-        sqlx::query("SELECT normalized_json, raw_json FROM extractions WHERE id = ?")
+        sqlx::query("SELECT normalized_json, raw_json FROM extractions WHERE id = $1")
             .bind(first.id.to_string())
             .fetch_one(&pool)
             .await
@@ -200,23 +214,21 @@ async fn lists_summaries_in_fixed_width_descending_timestamp_order_without_json_
             .is_ok()
     );
     assert!(blobs_selected.try_get::<String, _>("raw_json").is_ok());
-
-    drop(pool);
-    std::fs::remove_dir_all(directory).expect("temporary directory should be removed");
 }
 
 #[tokio::test]
-async fn deletes_individual_and_all_rows_and_reopens_with_wal_persistence() {
-    let (directory, url) = temporary_database_url();
+async fn deletes_individual_and_all_rows_and_persists_across_connections() {
+    let url = temporary_database_url();
     let pool = db::connect(&url)
         .await
         .expect("database should connect and migrate");
+    reset_database(&pool).await;
     seed_user(&pool, "default").await;
-    let journal_mode = sqlx::query_scalar::<_, String>("PRAGMA journal_mode")
+    let database_name = sqlx::query_scalar::<_, String>("SELECT current_database()")
         .fetch_one(&pool)
         .await
-        .expect("journal mode should be readable");
-    assert_eq!(journal_mode, "wal");
+        .expect("database name should be readable");
+    assert!(!database_name.is_empty());
     assert!(
         db::get_stored(&pool, test_user("default"), uuid::Uuid::now_v7())
             .await
@@ -276,21 +288,19 @@ async fn deletes_individual_and_all_rows_and_reopens_with_wal_persistence() {
             .total,
         0
     );
-
-    drop(reopened);
-    std::fs::remove_dir_all(directory).expect("temporary directory should be removed");
 }
 
 #[tokio::test]
 async fn migration_rejects_rows_that_mix_success_and_failure_payloads() {
-    let (directory, url) = temporary_database_url();
+    let url = temporary_database_url();
     let pool = db::connect(&url)
         .await
         .expect("database should connect and migrate");
+    reset_database(&pool).await;
 
     sqlx::query(
         "INSERT INTO users (id, google_subject, email, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?)",
+         VALUES ($1, $2, $3, $4, $5)",
     )
     .bind(test_user("default").to_string())
     .bind("test:default")
@@ -305,7 +315,7 @@ async fn migration_rejects_rows_that_mix_success_and_failure_payloads() {
         "INSERT INTO extractions (
             id, user_id, file_name, file_size_bytes, status, normalized_json, raw_json,
             error_code, error_message, created_at
-        ) VALUES (?, ?, ?, ?, 'failed', ?, ?, NULL, NULL, ?)",
+        ) VALUES ($1, $2, $3, $4, 'failed', $5, $6, NULL, NULL, $7)",
     )
     .bind(uuid::Uuid::now_v7().to_string())
     .bind(test_user("default").to_string())
@@ -321,15 +331,13 @@ async fn migration_rejects_rows_that_mix_success_and_failure_payloads() {
         inconsistent.is_err(),
         "table check must reject inconsistent rows"
     );
-
-    drop(pool);
-    std::fs::remove_dir_all(directory).expect("temporary directory should be removed");
 }
 
 #[tokio::test]
 async fn fit_coach_tables_indexes_and_owner_scoped_activity_contract() {
-    let (directory, url) = temporary_database_url();
+    let url = temporary_database_url();
     let pool = db::connect(&url).await.expect("database should connect");
+    reset_database(&pool).await;
     seed_user(&pool, "default").await;
     seed_user(&pool, "other").await;
 
@@ -341,7 +349,8 @@ async fn fit_coach_tables_indexes_and_owner_scoped_activity_contract() {
         "oauth_refresh_tokens",
     ] {
         let exists = sqlx::query_scalar::<_, i64>(
-            "SELECT count(*) FROM sqlite_master WHERE type = 'table' AND name = ?",
+            "SELECT count(*) FROM information_schema.tables
+             WHERE table_schema = current_schema() AND table_name = $1",
         )
         .bind(table)
         .fetch_one(&pool)
@@ -359,7 +368,8 @@ async fn fit_coach_tables_indexes_and_owner_scoped_activity_contract() {
         "oauth_refresh_tokens_expiry_idx",
     ] {
         let exists = sqlx::query_scalar::<_, i64>(
-            "SELECT count(*) FROM sqlite_master WHERE type = 'index' AND name = ?",
+            "SELECT count(*) FROM pg_indexes
+             WHERE schemaname = current_schema() AND indexname = $1",
         )
         .bind(index)
         .fetch_one(&pool)
@@ -421,15 +431,13 @@ async fn fit_coach_tables_indexes_and_owner_scoped_activity_contract() {
             .expect("cascade lookup should work")
             .is_none()
     );
-
-    drop(pool);
-    std::fs::remove_dir_all(directory).expect("temporary directory should be removed");
 }
 
 #[tokio::test]
 async fn fit_coach_backfill_is_idempotent_and_omits_undated_or_failed_rows() {
-    let (directory, url) = temporary_database_url();
+    let url = temporary_database_url();
     let pool = db::connect(&url).await.expect("database should connect");
+    reset_database(&pool).await;
     seed_user(&pool, "default").await;
     let dated = db::insert_success(
         &pool,
@@ -470,14 +478,13 @@ async fn fit_coach_backfill_is_idempotent_and_omits_undated_or_failed_rows() {
             .len(),
         1
     );
-    drop(reopened);
-    std::fs::remove_dir_all(directory).expect("database directory should be removed");
 }
 
 #[tokio::test]
 async fn fit_coach_oauth_values_are_hashed_and_refresh_rotation_revokes_old_token() {
-    let (directory, url) = temporary_database_url();
+    let url = temporary_database_url();
     let pool = db::connect(&url).await.expect("database should connect");
+    reset_database(&pool).await;
     seed_user(&pool, "default").await;
     let user = test_user("default");
     let now = db::timestamp_now();
@@ -560,6 +567,4 @@ async fn fit_coach_oauth_values_are_hashed_and_refresh_rotation_revokes_old_toke
         .await
         .expect("hash should be stored");
     assert_ne!(raw, "access-two");
-    drop(pool);
-    std::fs::remove_dir_all(directory).expect("database directory should be removed");
 }

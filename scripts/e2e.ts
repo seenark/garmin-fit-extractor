@@ -1,5 +1,3 @@
-import { mkdtemp, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
 const repositoryRoot = resolve(import.meta.dir, "..");
@@ -94,15 +92,16 @@ async function waitForHealth(api: ManagedProcess, web: ManagedProcess): Promise<
 }
 
 async function run(): Promise<void> {
-  const temporaryDirectory = await mkdtemp(
-    join(tmpdir(), "garmin-fit-extractor-e2e-"),
-  );
-  const databasePath = join(temporaryDirectory, "garmin-fit-extractor.sqlite3");
-  const databaseUrl = `sqlite://${databasePath}`;
+  const databaseUrl = process.env.TEST_DATABASE_URL ?? process.env.DATABASE_URL;
+  if (!databaseUrl?.startsWith("postgres://") && !databaseUrl?.startsWith("postgresql://")) {
+    throw new Error(
+      "bun run test:e2e requires TEST_DATABASE_URL or DATABASE_URL pointing to disposable PostgreSQL",
+    );
+  }
   const environment = {
     ...process.env,
     GARMIN_FIT_BIND: apiAddress,
-    GARMIN_FIT_DATABASE_URL: databaseUrl,
+    DATABASE_URL: databaseUrl,
     GARMIN_FIT_TEST_AUTH: "true",
   };
   const cargoTargetDirectory = resolve(
@@ -185,7 +184,6 @@ async function run(): Promise<void> {
     const cleanup = await Promise.allSettled(
       [...started].reverse().map(stopProcess),
     );
-    await rm(temporaryDirectory, { force: true, recursive: true });
     const cleanupFailure = cleanup.find(
       (result) => result.status === "rejected",
     );

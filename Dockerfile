@@ -20,6 +20,7 @@ WORKDIR /app
 
 COPY Cargo.toml Cargo.lock ./
 COPY apps/api/Cargo.toml ./apps/api/Cargo.toml
+COPY tools/legacy-data-migrator/Cargo.toml ./tools/legacy-data-migrator/Cargo.toml
 COPY apps/api/src ./apps/api/src
 COPY apps/api/migrations ./apps/api/migrations
 
@@ -34,16 +35,15 @@ RUN apt-get update \
 
 RUN groupadd --gid 10001 garmin-fit \
     && useradd --uid 10001 --gid 10001 --no-create-home --shell /usr/sbin/nologin garmin-fit \
-    && mkdir -p /app/public /data \
-    && chown -R 10001:10001 /app /data
+    && mkdir -p /app/public \
+    && chown -R 10001:10001 /app
 
 COPY --from=rust-build /app/target/release/garmin-fit-extractor-api /usr/local/bin/garmin-fit-extractor-api
 COPY --from=web-build /app/apps/web/dist /app/public
 
 USER 10001:10001
 
-ENV GARMIN_FIT_STATIC_DIR=/app/public \
-    GARMIN_FIT_DATABASE_URL=sqlite:///data/garmin-fit-extractor.sqlite3
+ENV GARMIN_FIT_STATIC_DIR=/app/public
 
 EXPOSE 3000
 
