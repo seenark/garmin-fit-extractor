@@ -1,6 +1,10 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="title">
-  <title>Runner’s Garage</title>
-  <rect width="64" height="64" rx="16" fill="#8839ef"/>
-  <path d="M16 47V17h13c9 0 14 4 14 11 0 5-3 9-8 10l10 9h-9l-9-9h-4v9h-7Zm7-16h6c4 0 7-1 7-4s-3-4-7-4h-6v8Z" fill="#eff1f5"/>
-  <path d="M37 17h11v7H37z" fill="#eff1f5"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="logo-title logo-description">
+  <title id="logo-title">Runner’s Garage</title>
+  <desc id="logo-description">A running route inside a garage arch.</desc>
+  <rect x="2" y="2" width="60" height="60" rx="18" fill="#1e1e2e" />
+  <path d="M15.5 46.5V31a16.5 16.5 0 0 1 33 0v15.5" fill="none" stroke="#cba6f7" stroke-linecap="round" stroke-width="4" />
+  <path d="M13 47h38" fill="none" stroke="#45475a" stroke-linecap="round" stroke-width="3" />
+  <path d="M16 42h7l4-10 6 13 5-10 4 7h6" fill="none" stroke="#89b4fa" stroke-linecap="round" stroke-linejoin="round" stroke-width="3.5" />
+  <circle cx="16" cy="42" r="3" fill="#f9e2af" />
+  <circle cx="48" cy="42" r="2.5" fill="#cba6f7" />
 </svg>

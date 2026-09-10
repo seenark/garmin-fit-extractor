@@ -69,7 +69,7 @@ export function SignInScreen({
         </div>
         <section className="card auth-card" aria-labelledby="auth-card-title">
           <div className="auth-card-brand">
-            <span className="brand-mark" aria-hidden="true">RG</span>
+            <img className="brand-mark" src="/favicon.svg" alt="" width="32" height="32" />
             <div>
               <p className="auth-brand-byline">by น้ำเน่ารันคลับ</p>
               <span className="auth-card-product">Runner’s Garage</span>
@@ -106,7 +106,7 @@ function RootLayout() {
     <div className="shell">
       <header className="site-header">
         <Link className="brand" to="/" aria-label="Runner’s Garage กลับหน้าหลัก">
-          <span className="brand-mark" aria-hidden="true">RG</span>
+          <img className="brand-mark" src="/favicon.svg" alt="" width="32" height="32" />
           <span className="brand-lockup">
             <span className="brand-text">Runner’s Garage</span>
             <span className="brand-byline">by น้ำเน่ารันคลับ</span>

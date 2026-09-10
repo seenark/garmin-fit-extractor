@@ -187,18 +187,11 @@ button.danger:disabled {
 }
 
 .brand-mark {
-  align-items: center;
-  background: var(--color-accent);
   border-radius: var(--radius-badge);
-  color: var(--color-accent-ink);
-  display: inline-flex;
+  display: block;
   flex: 0 0 auto;
-  font-family: var(--font-mono);
-  font-size: var(--text-2xs);
-  font-weight: var(--font-weight-semibold);
   height: 2rem;
-  justify-content: center;
-  letter-spacing: var(--tracking-mono);
+  object-fit: cover;
   width: 2rem;
 }
 
