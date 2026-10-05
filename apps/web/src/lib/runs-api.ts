@@ -37,9 +37,20 @@ export function runExportUrl(snapshot: RunExportSnapshot): string {
   if (snapshot.downloadUrl !== expected) throw new Error("Invalid export download URL");
   return expected;
 }
-export async function readRunExport(snapshot: RunExportSnapshot): Promise<string> {
-  return (await responseOrError(await fetch(runExportUrl(snapshot), { credentials: "same-origin", cache: "no-store" }))).text();
+export class RunExportTextReadError extends Error {
+  readonly reason: "capacity" | "incomplete";
+  constructor(readonly byteLength: number, cause: unknown) {
+    const capacityExceeded = cause instanceof RangeError;
+    super(capacityExceeded
+      ? `The browser cannot read the complete ${byteLength}-byte snapshot as text. Download the complete same snapshot instead.`
+      : `Reading the complete ${byteLength}-byte snapshot failed. Download the same snapshot instead.`, { cause });
+    this.reason = capacityExceeded ? "capacity" : "incomplete";
+  }
 }
-export async function downloadRunExport(snapshot: RunExportSnapshot): Promise<Blob> {
-  return (await responseOrError(await fetch(runExportUrl(snapshot), { credentials: "same-origin", cache: "no-store" }))).blob();
+export async function readRunExport(snapshot: RunExportSnapshot): Promise<string> {
+  const response = await responseOrError(await fetch(runExportUrl(snapshot), { credentials: "same-origin", cache: "no-store" }));
+  try { return await response.text(); } catch (cause) { throw new RunExportTextReadError(snapshot.byteLength, cause); }
+}
+export async function validateRunExport(snapshot: RunExportSnapshot): Promise<void> {
+  await responseOrError(await fetch(runExportUrl(snapshot), { method: "HEAD", credentials: "same-origin", cache: "no-store" }));
 }

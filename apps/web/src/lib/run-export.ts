@@ -1,18 +1,12 @@
-import { createRunExport, downloadRunExport, readRunExport } from "./runs-api";
-import type { RunExportMode, RunExportSnapshot } from "./runs-types";
+import { createRunExport, readRunExport, runExportUrl, validateRunExport } from "./runs-api";
+import type { RunExportMode, RunExportSnapshot, RunPrivacyOmission } from "./runs-types";
 
-export interface PrivacyOmission {
-  category: "location" | "deviceIdentifiers" | "unclassified";
-  pathPattern: string;
-  count: number;
-  reason: string;
-}
-export interface RunExportPreview { omissions: PrivacyOmission[]; }
+export interface RunExportPreview { omissions: RunPrivacyOmission[]; }
 export interface RunExportSession {
   prepare(mode: RunExportMode): Promise<RunExportSnapshot>;
   preview(mode: RunExportMode): Promise<RunExportPreview>;
   copy(mode: RunExportMode, writeClipboard: (text: string) => Promise<void>): Promise<void>;
-  download(mode: RunExportMode): Promise<Blob>;
+  download(mode: RunExportMode): Promise<string>;
   invalidate(): void;
 }
 export class ExportChangedError extends Error {
@@ -25,24 +19,6 @@ export class ClipboardExportError extends Error {
   constructor() { super("Clipboard access failed. Download the same snapshot instead."); }
 }
 
-function parsePreview(text: string): RunExportPreview {
-  const document: unknown = JSON.parse(text);
-  if (!document || typeof document !== "object" || !("privacyOmissions" in document) || !Array.isArray(document.privacyOmissions)) {
-    throw new Error("Export privacy preview is unavailable.");
-  }
-  const omissions: PrivacyOmission[] = [];
-  for (const value of document.privacyOmissions) {
-    if (!value || typeof value !== "object" ||
-      !["location", "deviceIdentifiers", "unclassified"].includes(value.category) ||
-      typeof value.pathPattern !== "string" || typeof value.reason !== "string" ||
-      !Number.isSafeInteger(value.count) || value.count < 0) {
-      throw new Error("Export privacy preview is invalid.");
-    }
-    omissions.push({ category: value.category, pathPattern: value.pathPattern, count: value.count, reason: value.reason });
-  }
-  return { omissions };
-}
-
 /** One selection and privacy policy, with separate pinned snapshots for each mode. */
 export function createRunExportSession(activityIds: string[], includeLocation = false, includeDeviceIdentifiers = false): RunExportSession {
   const selection = [...activityIds];
@@ -50,8 +26,6 @@ export function createRunExportSession(activityIds: string[], includeLocation = 
   const slots: Partial<Record<RunExportMode, {
     preparing?: Promise<RunExportSnapshot>;
     snapshot?: RunExportSnapshot;
-    reading?: Promise<RunExportPreview>;
-    preview?: RunExportPreview;
   }>> = {};
   function check(snapshot?: RunExportSnapshot) {
     if (!active) throw new ExportChangedError();
@@ -68,14 +42,9 @@ export function createRunExportSession(activityIds: string[], includeLocation = 
   }
   async function preview(mode: RunExportMode): Promise<RunExportPreview> {
     const snapshot = await prepare(mode);
-    const slot = slots[mode]!;
-    if (slot.preview) return slot.preview;
-    slot.reading ??= readRunExport(snapshot).then((text) => {
-      check(snapshot);
-      slot.preview = parsePreview(text);
-      return slot.preview;
-    }).finally(() => { slot.reading = undefined; });
-    return slot.reading;
+    await validateRunExport(snapshot);
+    check(snapshot);
+    return { omissions: snapshot.privacyOmissions };
   }
   return {
     prepare,
@@ -88,11 +57,11 @@ export function createRunExportSession(activityIds: string[], includeLocation = 
       try { await writeClipboard(text); } catch { check(snapshot); throw new ClipboardExportError(); }
       check(snapshot);
     },
-    async download(mode: RunExportMode): Promise<Blob> {
+    async download(mode: RunExportMode): Promise<string> {
       const snapshot = await prepare(mode);
-      const blob = await downloadRunExport(snapshot);
+      await validateRunExport(snapshot);
       check(snapshot);
-      return blob;
+      return runExportUrl(snapshot);
     },
   };
 }

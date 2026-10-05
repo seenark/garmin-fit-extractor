@@ -123,15 +123,20 @@ test("authenticates, imports ZIP members, exports pinned Runs v2 snapshots, and 
       response.request().method() === "POST");
     await section.getByRole("button", { name: `เตรียม ${label} JSON`, exact: true }).click();
     const snapshot = await (await preparedResponse).json();
+    const validated = await context.request.head(snapshot.downloadUrl);
+    expect(validated.ok()).toBe(true);
+    expect(validated.headers()["content-length"]).toBe(String(snapshot.byteLength));
+    expect((await validated.body()).byteLength).toBe(0);
     const serverResponse = await context.request.get(snapshot.downloadUrl);
     expect(serverResponse.ok()).toBe(true);
     const serverBytes = await serverResponse.body();
     expect(serverBytes.at(-1)).toBe(10);
+    expect(snapshot.privacyOmissions).toEqual(JSON.parse(serverBytes.toString()).privacyOmissions);
     expect(JSON.parse(serverBytes.toString())).toMatchObject({
       schemaVersion: "2.0.0", mode, selection: [activityId],
       privacy: { includeLocation: false, includeDeviceIdentifiers: false },
     });
-    await section.getByRole("button", { name: "ตรวจรายการที่ละไว้ก่อน Copy" }).click();
+    await section.getByRole("button", { name: "ตรวจ snapshot ก่อน Copy" }).click();
     await section.getByRole("button", { name: `Copy ${label} JSON`, exact: true }).click();
     await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(serverBytes.toString());
     const download = page.waitForEvent("download");

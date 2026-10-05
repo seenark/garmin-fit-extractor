@@ -22,15 +22,17 @@
 
 History และ detail ตรวจสถานะใหม่ทุก 3 วินาทีเมื่อกิจกรรมยัง queued/processing หรือ historical stage ยัง pending โดยตรวจต่อแม้ normalized revision พร้อมแล้ว หาก update failed จะแยกข้อผิดพลาดจากผลก่อนหน้าที่ stale กิจกรรมเดิมที่ไม่มี Original FIT ระบุ `sourceUnavailable` และข้อจำกัดอย่างตรงไปตรงมา ไม่มีการสร้าง FIT, normalized streams หรือ trace ที่ไม่เคยมีขึ้นมา และไม่เปิด reprocess
 
+History refresh ใช้การโหลดข้อมูลแบบคงหน้าปัจจุบัน ทั้ง timer, หลังลบ และปุ่มลองโหลดอีกครั้ง หาก list request ล้มเหลวจะแสดงข้อผิดพลาดและเก็บข้อมูลล่าสุดที่โหลดสำเร็จไว้ ไม่ unmount หน้าที่มี selection และ pinned export token เมื่อ navigation หรือ loader ใหม่เข้ามา ผลจาก refresh เก่าจะไม่เขียนทับหน้าหรือการเรียงลำดับใหม่
+
 ## Coach JSON และ Full JSON
 
 ทั้งสองโหมดใช้ explicit selection เดียวกัน แต่สร้าง snapshot token ของแต่ละโหมด การเตรียม snapshot แสดงจำนวนกิจกรรม ขนาด bytes, fixed generatedAt และเวลาหมดอายุ ก่อนโหลดข้อมูลเพื่อ Copy ตัวเลือก location กับ device identifiers เป็นคนละ checkbox และปิดไว้เริ่มต้น การเปลี่ยน selection หรือ privacy ทำให้ต้องเตรียม snapshot ใหม่
 
 เมื่อรายการที่เลือกบนหน้าปัจจุบันมี `processing.historyStatus` เป็น pending หรือ failed จะยังไม่เปิด Prepare หรือสร้าง snapshot ใหม่ จนผลย้อนหลังพร้อม โดยไม่ล้าง selection หรือเรียกสถานะนี้ว่า insufficient_data รายการนอกหน้าปัจจุบันยังต้องผ่านการตรวจครบทุก ID ฝั่ง server; `EXPORT_NOT_READY` เป็นข้อผิดพลาดทั้ง selection ไม่ใช่การส่งออกบางส่วน Snapshot ที่เตรียมไว้แล้วไม่ถูกล้างเพียงเพราะ historical stage เปลี่ยน และ Copy/Download ยังคง GET token เดิมให้ server ตรวจทุกครั้ง
 
-Copy และ Download ใช้ token เดียวกันของโหมดนั้น และ GET token ทุกครั้งเพื่อให้ server ตรวจ owner/expiry/revocation แม้เคยเปิด preview แล้ว ไม่เปลี่ยน token หรือส่งออกเฉพาะ subset เงียบ ๆ Copy ใช้ server text ตาม bytes ของ pretty JSON พร้อม newline ไม่ parse แล้ว stringify ใหม่ Download ใช้ Blob จาก response ของ token เดียวกัน ดังนั้น pinned revisions และ generatedAt ไม่เปลี่ยนเพราะ activity reprocess
+Copy และ Download ใช้ token และ owner URL เดียวกันของโหมดนั้น โดย HEAD ตรวจ owner/expiry/revocation ก่อนแต่ละ action และ GET ตรวจซ้ำเมื่ออ่าน bytes จริง HEAD ไม่รับประกันว่า GET ในอนาคตจะสำเร็จ ไม่เปลี่ยน token หรือส่งออกเฉพาะ subset เงียบ ๆ Copy อ่าน server text ตาม bytes ของ pretty JSON พร้อม newline แล้วส่งให้ Clipboard API โดยไม่ parse/stringify หรือ cache ข้อความขนาดใหญ่ Download ส่ง owner URL เดิมให้ native browser download โดยไม่สร้าง Blob หรือโหลด JSON ทั้งหมดใน JavaScript ดังนั้น pinned revisions และ generatedAt ไม่เปลี่ยนเพราะ activity reprocess หน้าจอระบุเพียงว่าส่งคำขอดาวน์โหลดแล้ว ไม่อ้างว่าไฟล์ถูกบันทึกครบ
 
-Clipboard denial แสดงข้อผิดพลาดจริงและยัง Download snapshot เดิมได้ Server errors ไม่ล้าง selection รายการ `privacyOmissions` แสดง category, count, pathPattern และ reason จาก snapshot จริง ไม่แสดงค่าที่ซ่อนไว้ Download ทำได้โดยไม่โหลด JSON ทั้งหมดเป็นข้อความ แต่หน้าจอจะบอกว่ายังไม่ได้โหลด omission preview จนกดตรวจรายการ
+Clipboard denial และข้อผิดพลาดจริงในการอ่าน response เป็นข้อความแสดงเหตุผลอย่างตรงไปตรงมา ไม่อ้างว่า Copy สำเร็จ และยังใช้ Download snapshot เดิมแบบเต็มได้ ไม่มี Copy cap ที่ตั้งขึ้นโดยไม่มีหลักฐาน Server errors ไม่ล้าง selection รายการ `privacyOmissions` ใช้ metadata ของ pinned snapshot จาก POST หลัง HEAD ตรวจ token แล้ว แสดง category, count, pathPattern และ reason โดยไม่อ่านหรือ parse archive ทั้งหมดและไม่แสดงค่าที่ซ่อนไว้
 
 ChatGPT และ Claude prompt templates แก้แยกกัน Copy ใช้ข้อความปัจจุบันใน textarea ตามที่ผู้ใช้แก้ ไม่ฝัง prompt ใน JSON ไม่มี LLM network request หรือ API key หาก clipboard ใช้ไม่ได้ผู้ใช้เลือกข้อความใน textarea เพื่อคัดลอกเองได้
 
