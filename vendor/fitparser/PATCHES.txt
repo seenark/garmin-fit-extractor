@@ -21,11 +21,13 @@ Local patches:
   The profile's accumulated targets are distance, total_cycles,
   accumulated_power, and HR event_timestamp. This is not an HR-only patch.
 - KeepCompositeFields continues to retain the native packed composite.
-  Expanded fields carry the actual encoded parent field number.
+  Expanded fields carry the actual encoded parent field number. Native source
+  composites carry is_composite() even when no complete component is available,
+  so packed 0xff bits can be distinguished from ordinary byte sentinels.
 - FieldDefinition exposes field_definition_number(), size(), and base_type().
   DeveloperFieldDefinition exposes field_number(), size(), and
   developer_data_index(). FitDataField exposes developer_data_index(),
-  scale(), offset(), profile_type(), and component_parent(). Profile metadata
+  scale(), offset(), profile_type(), component_parent(), and is_composite(). Profile metadata
   comes from the actual builder arguments; unknown fields have no profile
   metadata. Developer descriptions supply real scale/offset but no native
   profile type. Profile type names use stable FIT snake_case labels, including

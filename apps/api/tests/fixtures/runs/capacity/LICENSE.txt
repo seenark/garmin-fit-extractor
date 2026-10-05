@@ -1,0 +1,34 @@
+SPDX-License-Identifier: CC0-1.0
+
+The original capacity generator, manifest, and generated FIT bytes are dedicated
+to the public domain under CC0 1.0 Universal:
+https://creativecommons.org/publicdomain/zero/1.0/
+
+Original author: ticket-inventory synthetic Runs smoke corpus. Original generator
+and manifest explicitly designate CC0 and entirely synthetic provenance. Copied
+and adapted only to document correct cadence units and allow an output directory;
+encoded FIT bytes and their golden SHA-256 hashes are preserved.
+
+No recorded activity, personal/private FIT, production identifiers, SDK, secret,
+or network source is required. Coordinates and serial numbers are invented
+privacy canaries, not real people, devices, or places observed by the generator.
+Python standard library only; public FIT field IDs and CRC arithmetic were
+inspected against the MIT-licensed fitparser 0.11.0 profile, not SDK code.
+
+Record message20 field4 is native cycles/min. The declared synthetic envelope
+170..190 cycles/min becomes340..380 canonical running steps/min. The unchanged
+formula170+(recordIndex*7)%21 actually emits170,177,184 cycles/min, which become
+340,354,368 steps/min. These intentionally synthetic values are not physiological
+validation claims.
+
+Reproduce without adding large binary files to the repository:
+python3 apps/api/tests/fixtures/runs/capacity/generate.py --output /tmp/garmin-runs-capacity-fixtures
+
+Generated files: chart_1h_3600.fit (3600 records), full_export_100k.fit (100000
+records), no_hr_power_600.fit (600 records), and manifest.json. The committed
+manifest records exact byte sizes, golden hashes, session boundaries, synthetic
+privacy canaries, units, fixed parameters, and CC0 provenance. Output FIT files
+are intentionally not committed. The generator accepts --output; without it,
+the output directory defaults to the directory containing generate.py.
+
+Provided without warranty. No medical or physiological precision is implied.

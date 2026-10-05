@@ -1,0 +1,159 @@
+{
+  "cadence": {
+    "arithmetic": "170 + (recordIndex * 7) % 21 cycles/min; only three discrete values occur. Running steps/min multiply native cycles/min by2.",
+    "canonical_step_per_min_envelope": [
+      340,
+      380
+    ],
+    "canonical_step_per_min_values": [
+      340,
+      354,
+      368
+    ],
+    "encoded_cycle_per_min_envelope": [
+      170,
+      190
+    ],
+    "encoded_cycle_per_min_values": [
+      170,
+      177,
+      184
+    ],
+    "fit_field_number": 4,
+    "fit_message_number": 20
+  },
+  "determinism": "Fixed parameters, no runtime randomness; rerunning replaces only these generated fixture names.",
+  "fixtures": [
+    {
+      "bytes": 83054,
+      "file": "chart_1h_3600.fit",
+      "first_record": {
+        "distance_m": 0.0,
+        "timestamp_utc": "2026-10-01T06:00:00+00:00"
+      },
+      "last_record": {
+        "distance_m": 10800.0,
+        "timestamp_utc": "2026-10-01T06:59:59+00:00"
+      },
+      "records": 3600,
+      "sensors": {
+        "heart_rate": true,
+        "native_cadence": true,
+        "power": true,
+        "rr_intervals": false,
+        "speed": true
+      },
+      "session": {
+        "distance_m": 10800.0,
+        "duration_s": 3600,
+        "elapsed_time_ms": 3600000,
+        "end_utc": "2026-10-01T07:00:00+00:00",
+        "sessions": 1,
+        "sport": "running",
+        "start_utc": "2026-10-01T06:00:00+00:00",
+        "timer_time_ms": 3600000
+      },
+      "sha256": "65fffab7ea0cae384cde4a0143805d7e83d098f188fdfd3691eb9de9b14e0d17",
+      "synthetic_privacy_canaries": {
+        "coordinates_degrees": [
+          12.345678,
+          -98.765432
+        ],
+        "device_serial_u32": 1511506142,
+        "only_synthetic": true
+      }
+    },
+    {
+      "bytes": 2300254,
+      "file": "full_export_100k.fit",
+      "first_record": {
+        "distance_m": 0.0,
+        "timestamp_utc": "2026-10-03T06:00:00+00:00"
+      },
+      "last_record": {
+        "distance_m": 10800.0,
+        "timestamp_utc": "2026-10-03T06:59:59+00:00"
+      },
+      "records": 100000,
+      "sensors": {
+        "heart_rate": true,
+        "native_cadence": true,
+        "power": true,
+        "rr_intervals": false,
+        "speed": true
+      },
+      "session": {
+        "distance_m": 10800.0,
+        "duration_s": 3600,
+        "elapsed_time_ms": 3600000,
+        "end_utc": "2026-10-03T07:00:00+00:00",
+        "sessions": 1,
+        "sport": "running",
+        "start_utc": "2026-10-03T06:00:00+00:00",
+        "timer_time_ms": 3600000
+      },
+      "sha256": "6b88daccc8663493a2c332ce24d6af76efad4230b372ec23a5e499cf7bcc13ec",
+      "synthetic_privacy_canaries": {
+        "coordinates_degrees": [
+          12.345678,
+          -98.765432
+        ],
+        "device_serial_u32": 1511506143,
+        "only_synthetic": true
+      }
+    },
+    {
+      "bytes": 12212,
+      "file": "no_hr_power_600.fit",
+      "first_record": {
+        "distance_m": 0.0,
+        "timestamp_utc": "2026-10-04T06:00:00+00:00"
+      },
+      "last_record": {
+        "distance_m": 1800.0,
+        "timestamp_utc": "2026-10-04T06:09:59+00:00"
+      },
+      "records": 600,
+      "sensors": {
+        "heart_rate": false,
+        "native_cadence": true,
+        "power": false,
+        "rr_intervals": false,
+        "speed": true
+      },
+      "session": {
+        "distance_m": 1800.0,
+        "duration_s": 600,
+        "elapsed_time_ms": 600000,
+        "end_utc": "2026-10-04T06:10:00+00:00",
+        "sessions": 1,
+        "sport": "running",
+        "start_utc": "2026-10-04T06:00:00+00:00",
+        "timer_time_ms": 600000
+      },
+      "sha256": "d9af8bf2548bf01d9e3e657c2a0784f9f7f0b8bc37b58b4ba01dc4d44c95e7e9",
+      "synthetic_privacy_canaries": {
+        "coordinates_degrees": [
+          12.345678,
+          -98.765432
+        ],
+        "device_serial_u32": 1511506144,
+        "only_synthetic": true
+      }
+    }
+  ],
+  "generator": "generate.py",
+  "license": "CC0-1.0",
+  "profile_version": "21.202",
+  "provenance": "Entirely synthetic bytes and values; no user/device FIT data. FIT profile IDs and CRC algorithm follow the FIT protocol/profile and MIT fitparser 0.11.0 source.",
+  "seed": "Fixed deterministic activity parameters; serial canaries 0x5A17C0DE..E0.",
+  "units": {
+    "cadence": "cycles/min synthetic native record cadence; canonical running steps/min = cycles/min * 2",
+    "coordinates": "degrees in manifest; FIT semicircles on wire",
+    "distance": "m",
+    "elapsed_time": "ms in FIT fields; seconds in summary",
+    "heart_rate": "bpm",
+    "power": "W",
+    "speed": "m/s"
+  }
+}

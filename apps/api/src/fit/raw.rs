@@ -11,24 +11,19 @@ const MAX_SAFE_INTEGER: i64 = 9_007_199_254_740_991;
 
 pub fn decode_raw(bytes: &[u8]) -> Result<Vec<RawFitRecord>, FitError> {
     fitparser::from_bytes(bytes)
-        .map(|records| {
-            records
-                .into_iter()
-                .map(|record| RawFitRecord {
-                    kind: record.kind().to_string(),
-                    fields: record
-                        .fields()
-                        .iter()
-                        .map(|field| RawFitField {
-                            name: field.name().into(),
-                            value: json_value(field.value()),
-                            units: (!field.units().is_empty()).then(|| field.units().into()),
-                        })
-                        .collect(),
-                })
-                .collect()
-        })
+        .map(|records| records.into_iter().map(|record| raw_record(&record)).collect())
         .map_err(|_| FitError::InvalidFit)
+}
+
+pub(super) fn raw_record(record:&fitparser::FitDataRecord)->RawFitRecord {
+    RawFitRecord {
+        kind:record.kind().to_string(),
+        fields:record.fields().iter().map(|field|RawFitField {
+            name:field.name().into(),
+            value:json_value(field.value()),
+            units:(!field.units().is_empty()).then(||field.units().into()),
+        }).collect(),
+    }
 }
 
 pub(super) fn json_value(value: &Value) -> JsonValue {
