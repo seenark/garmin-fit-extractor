@@ -597,3 +597,41 @@ fn export_preserves_unattempted_target_and_real_failed_target_nulls() {
     assert_eq!(result["lt2"]["reasons"],json!(["noExtrapolation"]));
     assert_eq!(result["lt2"]["trace"]["counts"]["rejected"],1);
 }
+
+#[test]
+fn verified_rr_reference_is_not_hidden_by_unknown_sensor_hr_only_member() {
+    let mut recorded=counter_quantized(progressive());
+    recorded["sensors"]=json!([]);
+    recorded["sourceRevision"]=json!("00000000-0000-4000-8000-000000000002");
+    recorded["projectionVersion"]=json!(thresholds::PROJECTION_VERSION);
+    let mut hr_only=recorded.clone();
+    hr_only["sourceRevision"]=json!("00000000-0000-4000-8000-000000000001");
+    hr_only["rr"]["intervals"]=json!([]);
+    hr_only["rr"]["alignmentEligible"]=json!(false);
+    for condensed in [false,true] {
+        let row=|id:&str,group:&str,normalized:&Value| {
+            let evaluated=analysis::analyze(normalized);
+            let receipt=json!({"kind":"immutableNumericalProjection","revisionId":normalized["sourceRevision"],
+                "inputHash":evaluated["thresholds"]["lt1"]["trace"]["inputHash"],"projectionVersion":thresholds::PROJECTION_VERSION});
+            let mut context=normalized.clone();
+            if condensed {context.as_object_mut().unwrap().remove("samples");context.as_object_mut().unwrap().remove("rr");}
+            json!({"activityId":id,"observationGroupId":group,"startTime":normalized["startTime"],"endTime":normalized["endTime"],
+                "normalized":context,"analysis":evaluated,"evidenceVerification":receipt})
+        };
+        for group in ["same-run","independent-run"] {
+            let result=thresholds::estimate_history("2026-01-01T00:08:00Z",&[row("a","same-run",&hr_only),row("b",group,&recorded)]);
+            assert!((result["lt1"]["value"]["heartRateBpm"].as_f64().unwrap()-134.71544856745652).abs()<1e-8);
+            assert_eq!(result["lt1"]["evidence"]["activityId"],"b");
+            assert_eq!(result["lt1"]["evidence"]["independentActivityCount"],1);
+            assert_eq!(result["lt2"]["reasons"],json!(["noExtrapolation"]));
+            assert_eq!(result["lt2"]["evidence"]["activityId"],"b");
+        }
+        let mut nondeclining=recorded.clone();
+        nondeclining["sourceRevision"]=json!("00000000-0000-4000-8000-000000000003");
+        for sample in nondeclining["samples"].as_array_mut().unwrap(){sample["heartRateBpm"]=json!(100.0);}
+        let guarded=thresholds::estimate_history("2026-01-01T00:08:00Z",&[row("a","same-run",&nondeclining),row("b","same-run",&recorded)]);
+        assert!(guarded["lt1"]["value"].is_null());
+        assert_eq!(guarded["lt1"]["evidence"]["activityId"],"a");
+        assert!(guarded["lt1"]["reasons"].as_array().unwrap().contains(&json!("noHrVariance")));
+    }
+}
