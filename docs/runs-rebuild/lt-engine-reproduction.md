@@ -49,9 +49,17 @@ python3 apps/api/tests/fixtures/runs-engine-oracle.py
 
 Python command ต้องใช้ runtime/dependencies ที่ pin ข้างบน Research dependencies ไม่ถูกเพิ่มใน application manifests Rust tests ใช้ public pure-engine seams และ actual generated RR ไม่ใช่ mocked target scalar Native FIT decoder smoke เป็นหลักฐานแยกด้านล่าง ไม่อ้างว่า `runs_engine` test เพียงชุดเดียวเปิด native FIT bytes
 
+เมื่อรวม decoder slice แล้ว ใช้ public writer seam `decode_run_to_writer` และ native beat-bound regression แยกจาก engine projection test:
+
+```sh
+cargo test -p garmin-fit-extractor-api --test runs_decode both_native_progressive_rr_fixtures_match_independent_quantized_beat_bounds -- --exact
+```
+
+คำสั่งนี้ตรวจ native decoder RR timing ของ FIT ทั้งสอง ส่วนการตรวจ native decoder output ต่อ engine และ independent F(n)/alpha/crossing ต้องรวม analysis slice ด้วย ไม่อ้างว่า native decoder test เพียงอย่างเดียวตรวจ physiological estimator
+
 ## ผลจาก actual native decoder smoke
 
-รัน public `decode_run` บน synthetic FIT ทั้งสอง แล้วส่ง actual normalized output เข้า engine เปรียบเทียบทุก window F(n), alpha, candidate selection และ crossing กับ encoded oracle โดยไม่ inject expected output:
+รัน public native decoder บน synthetic FIT ทั้งสอง แล้วส่ง actual normalized output เข้า engine เปรียบเทียบทุก window F(n), alpha, candidate selection และ crossing กับ encoded oracle โดยไม่ inject expected output:
 
 - Original amplitude 3: actual LT1 **134.71544856754312 bpm**; LT2 **null / noExtrapolation** Actual rejected .50 crossing **157.41934068501405** เกิน selected observed HR maximum **156.75** Maximum absolute alpha disagreement **4.9934056889355816e−11**, F disagreement **4.73042938153867e−10**
 - Distinct amplitude 6: actual LT1 **136.41887336482208 bpm**, LT2 **160.4210626128638 bpm** Independent expected **136.41887336477964 / 160.42106261369022** Maximum absolute alpha disagreement **2.4642399232277512e−11**, F disagreement **5.050644347193156e−10**
@@ -80,3 +88,27 @@ Receipt นี้เป็น internal contract ไม่ใช่ตัวอ�
 ## Release blockers ที่ยังคงอยู่
 
 ยังไม่มี licensed paired human **running RR + independent gas-exchange VT1/VT2 หรือ lactate-defined targets** จึงยังไม่ปิด human reference agreement, authorized preprocessing/Kubios comparison, empirical person-level uncertainty/sample-size plan หรือ independent physiological release gate ต้อง preregister population/sensor/protocol/selector/reference-repeat agreement ก่อน human holdout ไม่ตั้ง sample size/CI/LOA ที่ไม่มีข้อมูลรองรับ ไม่อ้าง validated lactate LT, clinical/training safety หรือ auto zone prescriptionจาก synthetic agreement
+
+## Scoped review และ regression proof
+
+Scoped `runs_engine` suite ผ่าน **31 tests** และ `cargo check --test runs_engine` ผ่าน หลังแก้ข้อพบจาก parallel Standards/Spec review แต่ละแกน 3 ข้อ ไม่ได้รัน project-wide suite ใน numerical slice นี้:
+
+- Artifact ที่ raw RR นอก 250–2000 ms แต่มี clean neighbors และ continuous native timing ไม่ตัด RR chain ออกก่อน correction ตัวอย่าง isolated 200 ms มี actual corrected full window ที่ center 240 s พร้อม invalid/corrected count 1 Source raw 200 ms ไม่เปลี่ยน Correction หา endpoints/continuity ครั้งเดียวต่อ consecutive artifact run และใช้ stack median buffer ไม่ rescan ย้อน/ล่วงหน้าทุก beat
+- Coverage ใช้ signal-range validation เดียวกับ numerical features Finite speed 16 m/s ไม่ถือเป็น usable support Sparse valid block endpoints จึงไม่ปลดล็อก progressive eligibility หรือ LT
+- Timer state ต้องพิสูจน์ได้ตลอด **แต่ละ full window** ไม่มี events/flags ให้ `requiredContextUnprovable` และ abstain Partial support 0–180 s ยังใช้ window center 120 s ได้ แต่ center 125 s ข้าม support-end และใช้ไม่ได้ Unknown context นอก selected window ไม่ถูกนำมาอ้างว่าผ่านหรือบังคับ reject ทั้งกิจกรรมโดยไม่มีเหตุ
+- History ตรวจ cached method/revision/hash ก่อนเลือก source ถ้า same-group activity `a` มี stale cache แต่ `b` มี actual eligible analysis ให้เลือก `b` แต่ละ target เลือก source เดียวและ independent count ไม่เพิ่มจาก duplicate members หรือ overlapping windows
+- Regression candidates เก็บ raw/corrected/**invalid/missing** counts ของ unique selected source-beat union ไม่บวกซ้ำจาก windows Missing count 0 หมายถึง proved source continuity; gap ที่ไม่รู้ actual missing count เป็น `null` ไม่วินิจฉัยจำนวน physiological missed beats
+- Export รักษา unattempted target `null` และ actual failed target `value: null` พร้อม status/reasons/counts ไม่สร้าง suggestions/trace object ปลอมแทน unattempted result
+
+Red/green proof ของข้อพบข้างต้น: ก่อนแก้ suite มี 25 passed/6 failed; หลังแก้ 31 passed Actual latest native writer output ทั้งสองยังได้ค่า/F(n)/alpha/history/condensed receipt ตรงหลักฐานข้างบน Wrong receipt revision ทำให้ abstain จริง
+
+Scoped throwaway smoke ประมวลผล **100,000 consecutive out-of-range 1-ms RR intervals** โดย source ทุกแถวยังอยู่ครบและไม่แต่ง threshold Source duration 100 s จึงไม่มี complete 120-s window Actual debug analysis ใช้ **2.638445083 s**, process maximum RSS **369,459,200 bytes** ตัวเลขนี้เป็น pathological software smoke หนึ่งกรณี ไม่ใช่ whole-service benchmark หรือ physiological evidence และไม่ได้เพิ่ม cap/downsample/truncation
+
+## Target-only native crops สำหรับ temporal integration proof
+
+ใช้ source amplitude-6 เดิมแบบ crop โดยไม่แก้ RR/HR/speed relationship, seed, selector หรือ method เก็บเฉพาะ intervals ที่มี start/end อยู่ใน source crop และเลื่อน relative clock ตาม crop start Native encoder สร้าง FIT ใหม่พร้อม genuine counter/fractional anchors และ UTC dates แยก old/fresh ตามโจทย์ temporal integration ไม่แทนค่า cached target ใน DB
+
+- Early source **0–320 s**: 321 samples, 634 RR; independent encoded expected LT1 **134.63727703919471 bpm**, LT2 `null`; actual native→engine LT1 **134.6372770392192 bpm**, LT2 `null`
+- Late source **220–480 s**: 261 samples, 651 RR; first supported interval เริ่ม **0.416015625 s** ใน new elapsed clock ไม่เติม interval 0–0.416 ให้ดูครบ First centered window จึงเริ่ม center 65 s ไม่ใช่ 60 s Independent encoded expected LT2 **160.42106261369022 bpm**, LT1 `null`; actual native→engine LT2 **160.4210626128638 bpm**, LT1 `null`
+
+รัน actual native writer outputs ทั้งสี่ old-LT1/fresh-LT2/old-LT2/fresh-LT1 ทุก window F(n)/alpha ตรง independent oracle ภายใน tolerances เดิม Public history ที่ source-end cutoff ให้ target-only result เดียวกันและ timer coverage complete วันที่ native source จริงใน smoke คือ 2026-09-25/2026-10-04 เวลาเริ่ม 13:07:16Z เป็นข้อมูล synthetic ไม่ใช่ historical human evidence ข้อนี้พิสูจน์ native numerical/history seams เท่านั้น ไม่อ้างว่า numerical slice รัน HTTP/PG/lastAvailable integration ซึ่ง integration owner ตรวจแยก
