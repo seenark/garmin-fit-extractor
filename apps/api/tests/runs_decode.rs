@@ -217,15 +217,26 @@ fn recorded_zero_rr_stays_zero_but_has_no_physiological_or_time_eligibility() {
 
 #[test]
 fn supported_header_forms_pass_and_unsupported_containers_publish_no_prefix() {
-    for bytes in [include_bytes!("fixtures/runs/garmin_header12.fit").as_slice(),include_bytes!("fixtures/runs/garmin_zero_header_crc.fit").as_slice()] {
+    for (bytes, header_size) in [
+        (include_bytes!("fixtures/runs/garmin_header12.fit").as_slice(),12),
+        (include_bytes!("fixtures/runs/garmin_zero_header_crc.fit").as_slice(),14),
+        (include_bytes!("fixtures/runs/garmin_extended_header16.fit").as_slice(),16),
+        (include_bytes!("fixtures/runs/garmin_extended_header16_crc.fit").as_slice(),16),
+        (include_bytes!("fixtures/runs/garmin_extended_header15.fit").as_slice(),15),
+        (include_bytes!("fixtures/runs/garmin_extended_header13.fit").as_slice(),13),
+    ] {
         let run = decode_run(bytes).unwrap();
         assert_eq!(run.normalized["summary"]["distanceMeters"],1000.0);
         assert_eq!(run.normalized["summary"]["timerTimeSeconds"],300.0);
+        assert_eq!(run.decoded["definitions"][0]["sourceReference"]["byteOffset"],header_size);
+        assert_eq!(run.normalized["samples"][0]["speedMps"],2.0);
     }
     for bytes in [
         include_bytes!("fixtures/runs/garmin_trailing_byte.fit").as_slice(),
         include_bytes!("fixtures/runs/garmin_chained.fit").as_slice(),
-        include_bytes!("fixtures/runs/garmin_extended_header16.fit").as_slice(),
+        include_bytes!("fixtures/runs/garmin_extended_header16_bad_header_crc.fit").as_slice(),
+        include_bytes!("fixtures/runs/garmin_extended_header16_bad_extension_crc.fit").as_slice(),
+        include_bytes!("fixtures/runs/garmin_extended_header16_truncated.fit").as_slice(),
     ] {
         assert!(matches!(decode_run(bytes),Err(FitError::InvalidFit)));
     }
