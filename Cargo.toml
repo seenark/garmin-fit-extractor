@@ -1,3 +1,6 @@
 [workspace]
 members = ["apps/api", "tools/legacy-data-migrator"]
 resolver = "2"
+
+[patch.crates-io]
+fitparser = { path = "vendor/fitparser" }

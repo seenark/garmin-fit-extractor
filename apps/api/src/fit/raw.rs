@@ -28,13 +28,10 @@ pub fn decode_raw(bytes: &[u8]) -> Result<Vec<RawFitRecord>, FitError> {
                 })
                 .collect()
         })
-        .map_err(|error| {
-            tracing::debug!(error = %error, "FIT decoding failed");
-            FitError::InvalidFit
-        })
+        .map_err(|_| FitError::InvalidFit)
 }
 
-fn json_value(value: &Value) -> JsonValue {
+pub(super) fn json_value(value: &Value) -> JsonValue {
     match value {
         Value::Timestamp(value) => {
             JsonValue::String(value.to_utc().to_rfc3339_opts(SecondsFormat::Millis, true))
