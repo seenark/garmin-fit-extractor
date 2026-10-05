@@ -3,7 +3,7 @@ use super::DecodeOption;
 use crate::profile::field_types::FitBaseType;
 use crate::{DeveloperFieldDescription, Value};
 use nom::bytes::streaming::{tag, take};
-use nom::combinator::cond;
+use nom::combinator::{cond, verify};
 use nom::multi::count;
 use nom::number::Endianness;
 use nom::number::streaming::{
@@ -54,7 +54,7 @@ impl Value {
 /// profile_ver_enc = u16
 /// data_size = u32
 /// literal ".FIT" = [u8; 4]
-/// CRC = u16 (if the header_size is 14 bytes)
+/// CRC = u16 (optional at fixed bytes 12–13 when the header contains them)
 #[derive(Clone, Debug)]
 pub struct FitFileHeader {
     /// Length of header in bytes, should be either 12 or 14
@@ -322,9 +322,12 @@ pub fn fit_file_header(input: &[u8]) -> IResult<&[u8], FitFileHeader> {
 /// Parse the FIT file header, the public function wraps an incomplete error to fix the needed bytes
 fn fit_file_header_impl(input: &[u8]) -> IResult<&[u8], FitFileHeader> {
     let (input, (header_size, proto, prof, data_size)) =
-        (le_u8, le_u8, le_u16, le_u32).parse(input)?;
+        (verify(le_u8, |size: &u8| *size >= 12), le_u8, le_u16, le_u32).parse(input)?;
     let (input, _) = tag(".FIT").parse(input)?;
-    let (input, crc) = cond(header_size > 12, le_u16).parse(input)?;
+    let (input, crc) = cond(header_size >= 14, le_u16).parse(input)?;
+    // Unknown future header bytes are opaque; data begins at the declared size.
+    let parsed_size = if crc.is_some() { 14 } else { 12 };
+    let (input, _) = take((header_size - parsed_size) as usize).parse(input)?;
     let protocol_ver_enc =
         split_decimal_to_float((proto >> 4) as u16, (proto & ((1 << 4) - 1)) as u16);
     let profile_ver_enc = split_decimal_to_float(prof / 100, prof % 100);

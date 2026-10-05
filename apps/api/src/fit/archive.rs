@@ -13,7 +13,7 @@ pub(super) enum Frame {
 
 pub(super) fn scan<F>(bytes:&[u8],emit:&mut F)->Result<Value,FitError>
 where F:FnMut(Frame)->Result<(),FitError> {
-    if bytes.len() < 12 || !matches!(bytes[0], 12 | 14) {
+    if bytes.len() < 12 || bytes[0] < 12 || bytes.len() < bytes[0] as usize {
         return Err(FitError::InvalidFit);
     }
     let data_size = u32::from_le_bytes(bytes[4..8].try_into().map_err(|_| FitError::InvalidFit)?) as usize;
