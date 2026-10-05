@@ -94,13 +94,13 @@ function HomePage() {
               <h3 id="runs-area-title">เก็บข้อมูลของเราเอง ดูให้ลึกขึ้น</h3>
               <p className="garage-area-product">Garmin FIT Extractor</p>
               <p>
-                นำไฟล์ ZIP จาก Garmin Connect มาอ่านทั้งภาพรวมและรายละเอียดที่อยู่ในกิจกรรม
-                แล้วเก็บผลลัพธ์ไว้กลับมาดูใน Runs
+                นำ Original FIT หรือ ZIP จาก Garmin Connect มาอ่านกราฟและรายละเอียดกิจกรรม
+                แล้วเก็บกิจกรรมพร้อม revisions ไว้กลับมาดูใน Runs
               </p>
               <ul className="garage-list">
-                <li>Normalized สำหรับเริ่มอ่านกิจกรรม</li>
-                <li>Raw JSON สำหรับเปิดดูข้อมูลทั้งชุด</li>
-                <li>ดาวน์โหลดไปอ่านต่อกับ ChatGPT หรือ Claude</li>
+                <li>กราฟ Pace, HR, Power และ Garmin laps</li>
+                <li>เลือกกิจกรรมเพื่อส่งออก Coach JSON หรือ Full JSON</li>
+                <li>ดาวน์โหลด JSON หรือ PNG ไปใช้ต่อเอง</li>
               </ul>
             </div>
             <Link className="garage-arrow-link" to="/history" search={{ offset: 0, order: "desc" }}>
@@ -168,8 +168,8 @@ function HomePage() {
           </div>
           <div className="garage-run-detail-copy">
             <p>
-              ข้อมูลบางอย่างเหมาะกับการดูเป็นภาพรวม บางอย่างต้องเปิด Raw JSON เพื่อให้บริบทไม่หาย
-              Runner’s Garage แยกสองมุมมองนี้ไว้ให้เดินต่อจากไฟล์เดียวกันได้
+              กราฟช่วยอ่าน normalized streams ส่วน Full JSON เก็บส่วนที่ decoder รองรับ
+              การส่งออกเลือกกิจกรรมอย่างชัดเจนและปิดข้อมูลตำแหน่งกับตัวระบุอุปกรณ์ไว้เริ่มต้น
             </p>
             <Link className="button" to="/upload">เพิ่มข้อมูลวิ่ง</Link>
           </div>
@@ -213,15 +213,15 @@ function HomePage() {
           <p className="garage-section-kicker">OPTIONAL HANDOFF</p>
           <h2 id="ai-title">AI เป็นผู้ช่วยอ่านข้อมูลต่อ ไม่ใช่เจ้าของข้อมูล</h2>
           <p>
-            เมื่ออยากถามคำถามที่เฉพาะขึ้น คัดลอกหรือดาวน์โหลด Raw JSON ไปใช้กับ ChatGPT หรือ Claude ได้
-            ข้อมูลยังเป็นของคุณ และคุณเป็นคนเลือกว่าจะส่งอะไรออกไป
+            คัดลอกหรือดาวน์โหลด Coach JSON หรือ Full JSON เฉพาะกิจกรรมที่เลือกไปใช้กับ ChatGPT หรือ Claude
+            prompt แก้ได้แยกจากข้อมูล ไม่มีการส่งไป LLM ให้อัตโนมัติ
           </p>
         </div>
         <div className="garage-ai-register" aria-label="เครื่องมือที่ใช้ต่อจากข้อมูล Run">
           <span>YOUR RUN</span>
           <div className="garage-ai-tools">
-            <span>FIT Coach</span>
-            <span>Raw Data</span>
+            <span>Coach JSON</span>
+            <span>Full JSON</span>
           </div>
           <Link to="/history" search={{ offset: 0, order: "desc" }}>ดู Runs ↗</Link>
         </div>
