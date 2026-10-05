@@ -92,10 +92,10 @@ async function waitForHealth(api: ManagedProcess, web: ManagedProcess): Promise<
 }
 
 async function run(): Promise<void> {
-  const databaseUrl = process.env.TEST_DATABASE_URL ?? process.env.DATABASE_URL;
+  const databaseUrl = process.env.TEST_DATABASE_URL;
   if (!databaseUrl?.startsWith("postgres://") && !databaseUrl?.startsWith("postgresql://")) {
     throw new Error(
-      "bun run test:e2e requires TEST_DATABASE_URL or DATABASE_URL pointing to disposable PostgreSQL",
+      "bun run test:e2e requires TEST_DATABASE_URL pointing to disposable PostgreSQL",
     );
   }
   const environment = {

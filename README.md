@@ -33,6 +33,13 @@ bun run build
 bun run test:e2e
 ```
 
+Tests require a newly created disposable PostgreSQL database. The Rust consumer
+tests truncate authentication and application tables; never use a shared or
+existing development database. Set both `TEST_DATABASE_URL` and `DATABASE_URL`
+to the verified disposable target. `test:e2e` requires `TEST_DATABASE_URL`
+explicitly and never falls back to an ambient `DATABASE_URL`. Run verification
+from a secret-free source archive so child tools cannot load private `.env` files.
+
 The web development server proxies `/api` and `/healthz` to Axum at `127.0.0.1:3000`. Production uses same-origin Google authentication and does not configure CORS. Set the Google OAuth variables before exposing the service publicly and use TLS so the callback and session cookie remain protected.
 
 ## Preserved CLI

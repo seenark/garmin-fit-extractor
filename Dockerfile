@@ -21,6 +21,8 @@ WORKDIR /app
 COPY Cargo.toml Cargo.lock ./
 COPY apps/api/Cargo.toml ./apps/api/Cargo.toml
 COPY tools/legacy-data-migrator/Cargo.toml ./tools/legacy-data-migrator/Cargo.toml
+COPY tools/legacy-data-migrator/src ./tools/legacy-data-migrator/src
+COPY vendor ./vendor
 COPY apps/api/src ./apps/api/src
 COPY apps/api/migrations ./apps/api/migrations
 
