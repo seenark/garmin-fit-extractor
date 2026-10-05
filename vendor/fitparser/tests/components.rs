@@ -94,6 +94,9 @@ fn undescribed_developer_bytes_are_opt_in_and_keep_developer_identity() {
     assert_eq!(field.value(), &Value::Array(vec![Value::Byte(255), Value::Byte(0), Value::Byte(9)]));
     assert_eq!(field.scale(), None);
     assert_eq!(field.profile_type(), None);
+    let opaque_ff = envelope(&[0x60, 0, 0, 20, 0, 0, 1, 2, 1, 7, 0, 255]);
+    let archived = from_bytes_with_options(&opaque_ff, &options).unwrap();
+    assert_eq!(archived[0].fields()[0].value(), &Value::Byte(255));
 }
 
 #[test]

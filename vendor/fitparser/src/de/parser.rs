@@ -559,7 +559,17 @@ fn data_message_fields_impl<'a>(
             .get(&(field_def.developer_data_index, field_def.field_number))
         {
             Some(description) => description.fit_base_type_id,
-            None if options.contains(&DecodeOption::PreserveUnknownDeveloperFields) => FitBaseType::Byte,
+            None if options.contains(&DecodeOption::PreserveUnknownDeveloperFields) => {
+                let (remaining, bytes) = take(usize::from(field_def.size)).parse(input)?;
+                let value = if bytes.len() == 1 {
+                    Value::Byte(bytes[0])
+                } else {
+                    Value::Array(bytes.iter().copied().map(Value::Byte).collect())
+                };
+                developer_fields.insert((field_def.developer_data_index, field_def.field_number), value);
+                input = remaining;
+                continue;
+            }
             None => return Err(nom::Err::Error(nom::error::Error {
                 input,
                 code: nom::error::ErrorKind::Fail,

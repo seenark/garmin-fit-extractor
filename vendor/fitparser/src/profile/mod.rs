@@ -203,7 +203,6 @@ fn prepare_component(
         }
         value => expand(value)?,
     }
-    seed_component(accumulators, msg_num, def_num, &Value::UInt64(previous), scale, offset);
     Ok(Some(value))
 }
 
