@@ -487,7 +487,7 @@ fn event_end(evidence:&Value)->Option<DateTime<chrono::FixedOffset>> {
 struct HistoricalEvidence<'a> {
     source:&'a Value,
     age_days:f64,
-    comparable:bool,
+    recording_scope:Option<String>,
     analysis:std::borrow::Cow<'a,Value>,
     input_hash:Option<String>,
 }
@@ -503,30 +503,36 @@ pub fn estimate_history(cutoff:&str,evidence:&[Value])->Value {
         Some((row,end))
     }).collect();
     rows.sort_by(|(a,ta),(b,tb)|tb.cmp(ta).then_with(||a["activityId"].as_str().unwrap_or("").cmp(b["activityId"].as_str().unwrap_or(""))));
-    let reference=rows.first().map(|(row,_)|*row);
-    let scope=reference.and_then(|row|comparability(&row["normalized"]));
     let mut prepared=Vec::new();
     let configuration_hash=method(0.75)["configurationHash"].clone();
     for (row,end) in rows {
         let analysis=if row["analysis"]["thresholds"].is_object(){std::borrow::Cow::Borrowed(&row["analysis"])}else{std::borrow::Cow::Owned(super::analysis::analyze(&row["normalized"]))};
-        let comparable=scope.as_ref().is_some_and(|key|comparability(&row["normalized"]).as_ref()==Some(key))
-            || reference.is_some_and(|reference|reference["activityId"]==row["activityId"]);
         let age=cutoff_time.map(|cutoff|(cutoff-end).num_milliseconds() as f64/86_400_000.0).unwrap_or(f64::INFINITY);
         let input_hash=historical_input_digest(row);
-        prepared.push(HistoricalEvidence{source:row,age_days:age,comparable,analysis,input_hash});
+        let recording_scope=comparability(&row["normalized"]);
+        prepared.push(HistoricalEvidence{source:row,age_days:age,recording_scope,analysis,input_hash});
     }
     // Each target selects one source, so duplicate members never add weight.
     // Validate first; a stale representative must not hide valid cache.
     let produce=|slot:&str,target:f64| {
         let expected_id=if target==0.75 {"running-dfa-a1-075"} else {"running-dfa-a1-050"};
-        let evaluated=|entry:&HistoricalEvidence| {
+        let verified=|entry:&HistoricalEvidence| {
             let result=&entry.analysis["thresholds"][slot];
-            entry.age_days<=7.0&&entry.comparable&&entry.input_hash.is_some()
+            entry.age_days<=7.0&&entry.input_hash.is_some()
                 &&matches!(result["status"].as_str(),Some("estimated"|"low_confidence"|"insufficient_data"))
                 &&result["method"]["id"]==expected_id&&result["method"]["version"]==METHOD_VERSION&&result["method"]["configurationHash"]==configuration_hash
                 &&result["trace"]["inputRevision"]==entry.source["normalized"]["sourceRevision"]&&result["trace"]["inputHash"]==json!(entry.input_hash)
                 &&result["trace"]["evidenceCutoff"]==entry.source["normalized"]["endTime"]
         };
+        // A proven sensor change remains binding even if its numerical cache is stale.
+        // Unknown HR-only/stale data cannot define RR context or promote a group.
+        let reference=prepared.first().filter(|entry|entry.recording_scope.is_some())
+            .or_else(||prepared.iter().find(|entry|verified(entry)&&entry.analysis["thresholds"][slot]["trace"]["windows"].as_array()
+                .is_some_and(|windows|windows.iter().any(|window|window["rawBeatCount"].as_u64().is_some_and(|count|count>0)))))
+            .or_else(||prepared.iter().find(|entry|verified(entry)));
+        let scope=reference.and_then(|entry|entry.recording_scope.as_ref());
+        let evaluated=|entry:&HistoricalEvidence|verified(entry)&&(scope.is_some_and(|scope|entry.recording_scope.as_ref()==Some(scope))
+            ||reference.is_some_and(|reference|reference.source["activityId"]==entry.source["activityId"]));
         let current=prepared.iter().find(|entry|evaluated(entry)&&matches!(entry.analysis["thresholds"][slot]["status"].as_str(),Some("estimated"|"low_confidence"))&&number(&entry.analysis["thresholds"][slot]["value"],"heartRateBpm").is_some());
         let attempted=prepared.iter().find(|entry|evaluated(entry));
         let result=if let Some(entry)=current.or(attempted) {
@@ -541,7 +547,7 @@ pub fn estimate_history(cutoff:&str,evidence:&[Value])->Value {
             result
         } else {
             let empty=json!({});
-            let normalized=reference.map(|row|&row["normalized"]).unwrap_or(&empty);
+            let normalized=reference.or_else(||prepared.first()).map(|entry|&entry.source["normalized"]).unwrap_or(&empty);
             let reason=if cutoff_time.is_none(){"invalidEvidenceCutoff"}else{"noRecentComparableEvidence"};
             let input_hash=input_digest(normalized);
             let mut result=target_result(target,normalized,&input_hash,&[],vec![],vec![reason.into()]);
