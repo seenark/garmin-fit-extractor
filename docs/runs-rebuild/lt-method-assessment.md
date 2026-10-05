@@ -1,10 +1,10 @@
 # การประเมินวิธีประมาณ LT1 และ LT2 สำหรับ Runs
 
-สถานะ: **research/proposal เท่านั้น** ตรวจแหล่งข้อมูลวันที่ 2026-10-04 ยังไม่มี production implementation, ไม่มี physiological validation ของระบบนี้ และไม่ได้รัน baseline suite ของ repository รายงานนี้ไม่ประกาศว่า estimator ที่คืน `null` ทุกกรณีเป็นงานเสร็จ
+สถานะอัปเดต 2026-10-05: **experimental numerical implementation** มี scoped regression tests และ actual native synthetic FIT→RR→positive LT1/LT2 เทียบ independent SciPy/nolds แล้ว ยังไม่มี physiological validation, licensed paired human reference corpus หรือ Kubios equivalence รายละเอียดและคำสั่งอยู่ใน [reproduction record](lt-engine-reproduction.md) ข้อความที่ระบุ “รอบ research 2026-10-04” ด้านล่างเป็นบันทึกก่อน implementation ไม่ใช่สถานะ engine ปัจจุบัน
 
 ## 1. ข้อเสนอที่เลือก
 
-เลือกทำ numerical research candidate สองตัวแยกกันหลังอนุมัติ implementation: `running-dfa-a1-075` สำหรับ **HRVT1 ที่เป็น VT1 proxy** และ `running-dfa-a1-050` สำหรับ **HRVT2 ที่เป็น VT2 proxy** ทั้งสองต้องใช้ beat-to-beat RR จริงระหว่างวิ่ง ไม่ใช่ RR ที่สร้างจาก sampled HR หรือ resting HRV วิธีนี้มี primary running validation จริง จึงไม่ถูกต้องที่จะสรุปว่าไม่มีวิธีใดทำได้จาก FIT โดยไม่ตรวจ RR และ protocol ก่อน [S1–S4]
+ใช้ numerical research candidates สองตัวแยกกัน: `running-dfa-a1-075` สำหรับ **HRVT1 ที่เป็น VT1 proxy** และ `running-dfa-a1-050` สำหรับ **HRVT2 ที่เป็น VT2 proxy** ทั้งสองต้องใช้ beat-to-beat RR จริงระหว่างวิ่ง ไม่ใช่ RR ที่สร้างจาก sampled HR หรือ resting HRV วิธีนี้มี primary running validation จริง จึงไม่ถูกต้องที่จะสรุปว่าไม่มีวิธีใดทำได้จาก FIT โดยไม่ตรวจ RR และ protocol ก่อน [S1–S4]
 
 ยังไม่เปิด validated automatic LT1/LT2 ใน release ทั่วไป เลือกสถานะ experimental แบบมีตัวเลขได้เฉพาะเมื่อ numerical, input provenance และ protocol gates ผ่าน ค่าเหล่านี้ต้องระบุ target เป็น ventilatory proxy ไม่ใช่ blood-lactate threshold ที่วัดโดยตรง **ยังไม่ถือว่าฟีเจอร์ LT estimation สมบูรณ์จน engine มี positive path ที่รันจาก exercise RR และผ่าน gates ด้านล่าง** การ import/export FIT ไม่ต้องรอ physiological release gate
 
@@ -173,7 +173,7 @@ Active men 7 คน วิ่ง/ปั่น 15 หรือ 45 นาทีท
 
 การคำนวณ pooled RMS ต้องรวม squared residuals ทุก subwindow ก่อน square root ไม่ใช่เฉลี่ย RMS ของแต่ละ subwindow [S13] แม้ชื่อ DFA เหมือนกัน overlap, scale list, residual denominator, end-tail treatment, smoothness-priors sampling convention และ artifact correction เปลี่ยนผลได้ ต้อง pin ทุกตัว ไม่อ้าง Kubios-equivalent จากการอ่าน formula อย่างเดียว
 
-ข้อเสนอ minimal deterministic selector สำหรับ research version: ใช้ contiguous chronological incremental portion; เลือก points ที่ corrected-quality ผ่านและ alpha อยู่ใน [0.5,1.0]; require negative fitted slope, nonzero HR variance, observed target bracket และ no pause/gap; ถ้ามีหลาย competing decline sections ไม่เลือกอันที่ตรง device threshold มากสุด ให้ `ambiguousCrossing` นี่เป็น **proposed automatic adaptation** เพราะ published papers ใช้ visual section selection; ต้อง validate selector ต่างหาก ห้ามเรียก exact reproduction
+Selector ที่ freeze สำหรับ research version: contiguous chronological windows ที่ corrected-quality ผ่านและ alpha อยู่ใน [0.5,1.0] อย่างน้อย 3 windows; อนุญาต boundary window ที่ติดกันโดยตรงไม่เกินหนึ่งที่ต้นและหนึ่งที่ท้ายเพื่อให้เห็น observed crossing ต้องมี negative fitted slope, nonzero HR variance, observed target bracket, fitted crossing ภายใน selected observed HR range และ no pause/gap หากมีหลาย eligible competing decline sections ให้ `ambiguousCrossing` ไม่เลือกอันที่ใกล้ device threshold นี่เป็น **open automatic adaptation** เพราะ papers ใช้ visual section selection; ต้อง validate selector ต่างหาก ห้ามเรียก exact Kubios reproduction ไม่เพิ่ม R² cutoff หรือ relax noExtrapolation เพื่อให้ fixture ผ่าน
 
 เมื่อเลือก algorithm แล้วให้ pin window closure/time anchoring และ upper/lower crossing equality โดย fixtures ไม่เพิ่ม post-hoc R² cutoff หรือ pick “best” combination บน holdout ไม่มีค่า R² สากลในหลักฐานที่อนุญาตให้รับหรือปฏิเสธทุกคนอย่างอัตโนมัติ
 
@@ -189,7 +189,7 @@ Active men 7 คน วิ่ง/ปั่น 15 หรือ 45 นาทีท
 
 ## 8. Numerical fixtures ไม่ใช่ physiological validation
 
-ชุดต่อไปนี้เป็น **fixture specification** ยังไม่ได้สร้าง engine หรือ permanent fixtures ใน repository:
+รายการต่อไปนี้เริ่มเป็น fixture specification ในรอบ research 2026-10-04 ปัจจุบันสร้าง software fixtures และ engine แล้วตามข้อ 13 ส่วน licensed human comparator/physiological fixtures ยังขาดและไม่ถูกแทนด้วย synthetic data
 
 **Positive software fixtures**
 
@@ -206,7 +206,7 @@ Active men 7 คน วิ่ง/ปั่น 15 หรือ 45 นาทีท
 - Activity มี strides แต่ early eligible ramp ยังต้องใช้ได้; late surge/recovery หลัง intervals ต้องไม่ถูกเลือกเป็น fresh threshold; opposite LT1/LT2 estimates ต้องได้ conflict ไม่ clamp หรือ derive missing partner ด้วย ratio
 - Later-uploaded old activity, source deletion, processing failure และ reprocess version ให้ตรวจ cutoff/revision และ last-good separation ไม่ใช้ null ของ latest attempt ลบ evidence ของ old valid result
 
-**สิ่งที่รันจริงในรอบนี้:** throwaway Python **3.12.13** cell คำนวณ OLS fixture (ได้ 150.0/170.0 bpm) และ paired errors จาก S2 Table 1 (n=15, MAE 8.2, max 22 bpm) ไม่ได้รัน DFA, sensor input, FIT engine, Kubios, physiological validation หรือ repository tests ไม่มี script scaffold ถูกเพิ่ม
+**รอบ research 2026-10-04:** throwaway Python **3.12.13** คำนวณ OLS fixture (150.0/170.0 bpm) และ paired errors จาก S2 Table 1 (n=15, MAE 8.2, max 22 bpm) รอบนั้นยังไม่ได้รัน DFA/FIT engine ข้อ 13 ระบุหลักฐาน implementation รอบปัจจุบันแยกจาก physiological validation
 
 ## 9. Dataset availability และสิ่งที่ยังขาด
 
@@ -308,18 +308,36 @@ Milestoneถัดไปต้องทำ **short optional templatesแยก L
 
 Template publication gate: approved method version, exact required/optional facts, sensor/protocol eligibility proof, numerical positive/negative path, Thai wordingที่ไม่ promiseผลและไม่ prescribe intensityที่เพิ่มขึ้นเพียงเพื่อสร้าง output Suggestionsเลือกจาก actual reason traceของ LT1/LT2แยกกัน
 
-## 12. ผลรอบนี้และ remaining gates
+## 12. ผลรอบ research 2026-10-04 และ remaining release gates
 
 **ทำแล้ว:** อ่าน supplied sourcesทั้งสามและ public full textsที่เข้าถึงได้; ตรวจ primary running/cycling validations, numerical comparator source/version/license, public dataset file/license metadata; คำนวณ primary paired-error arithmeticและ analytical OLS crossing smoke ตามข้อ 8; เขียนข้อเสนอ release contract
 
-**ยังไม่ได้ทำ:** DFA implementation, raw RR parsing/quality/correction comparator, FIT end-to-end positive path, physiological testing, clinical/training safety validation, decoder deployment, baseline suite หรือ private FIT access
+**ยังไม่ได้ทำในรอบ research:** DFA implementation, raw RR parsing/quality/correction comparator และ FIT positive path ได้ทำในรอบ implementation ตามข้อ 13 แล้ว ส่วน physiological testing, clinical/training safety validation, decoder deployment, baseline suite และ private FIT access ไม่ได้ทำในงาน numerical slice นี้
 
 **Experimentalที่เลือก:** DFA-a1 0.75/0.50 running ventilatory proxies เป็นสอง real numerical candidates พร้อม implementation/reproduction plan ไม่ใช่ universal impossibilityและไม่ใช่ completed null engine
 
-**Blockedก่อน research execution:** licensed paired exercise-RR reference corpusและpermissions; exact preprocessing/automatic selection reproduction; sensor-to-FIT time alignment proof; locked empirical sample-size/uncertainty plan G1–G4
+**Blocked สำหรับ human reference research:** licensed paired exercise-RR reference corpusและpermissions; authorized paired preprocessing/selector agreement; locked empirical sample-size/uncertainty plan G1–G4 Native supported source RR alignment และ independent software comparator ทำแล้ว แต่ไม่ใช้แทน human reference หรือรับรอง Kubios equivalence
 
 **Blockedก่อน validated release:** independent running cohortและindividual/reference-repeat agreement G5; lactate-specific paired running evidenceหากใช้ lactate claim; intended-use error/safety evidenceหากจะ prescribe zones
 
 **Deferred:** original full TT protocol/verificationและSPWVD method/license/corpus; ไม่ต้องให้ผู้ใช้เลือก physiological formulaเพื่อปลด blockersเหล่านี้
 
 **Not supported:** 5% drift threshold estimator, fastest-segment TT proof, RRจากsampled HR/resting HRV, fixed LT1/LT2 ratios, silent target substitution, automatic all-out suggestions และ manufactured physiological confidence
+
+## 13. หลักฐาน implementation 2026-10-05
+
+Engine `running-dfa-open-1.0.0` ใช้ smoothness-priors λ=500 ผ่าน pentadiagonal Cholesky, scales 4–16, non-overlap, pooled squared residual RMS, ordinary least squares และ 120-second/5-second windows ไม่มี HR stability filter ตัด drift, RR=`60000/HR`, fixed LT ratio หรือ extrapolation Native eligibility ต้องมี HR message 132 timestamp/fractional timestamp/event-counter anchors และ absolute/relative beat timing ที่สอดคล้อง ไม่ใช้ arrival timestamp ของ HRV message 78
+
+ข้อมูลทั้งหมดในหลักฐานนี้เป็น **CC0 synthetic software fixtures** ไม่ใช่ human running corpus Independent SciPy/nolds oracle freeze ก่อนประเมิน engine และเปรียบเทียบ F(4)…F(16), alpha ทุก window และ crossing ไม่เทียบเฉพาะ scalar card:
+
+- Original quantized native FIT: actual LT1 **134.71544856754312 bpm**, LT2 `null` เพราะ `noExtrapolation` Actual LT2 fitted crossing **157.41934068501405** สูงกว่า selected observed HR maximum **156.75** จึงต้องคง rejected candidate นี้ Maximum absolute alpha/F disagreement เทียบ oracle คือ **4.9934056889355816e−11 / 4.73042938153867e−10** ไม่ปรับ fixture เดิมหรือ gate เพื่อให้เป็น positive
+- Distinct positive quantized native FIT: actual LT1 **136.41887336482208 bpm**, LT2 **160.4210626128638 bpm** เทียบ independent expected **136.41887336477964 / 160.42106261369022** Maximum absolute alpha/F disagreement **2.4642399232277512e−11 / 5.050644347193156e−10** แต่ละ target มี eligible decline section เดียว ส่วน LT2 อีก section ถูก reject จริง
+- ทั้งสอง FIT มี 481 recorded samples และ 1,063 encoded RR intervals ผ่าน public decoder แล้ว ไม่ใช่ manufactured target fields หรือ mocked cached scalar
+
+Regression ครอบคลุม artifact correction 3% inclusion และ 4/5/6% rejection, gaps/pauses/full-window timing, constant HR/RR, positive slope, chronological adjacency, ambiguity, early valid progression ก่อน late strides, event cutoff/deletion/revision/hash, distinct sensor scope, selected-only export และ sparse long-duration source
+
+History รักษา failed target trace จาก actual evaluation ถ้าไม่มี numerical positive แทนที่จะคืน empty registry รักษา older eligible LT2 แยกจาก newer LT1 และแจ้ง `conflictingTargetOrder` โดยไม่ clamp Core เก็บ actual lastAvailable แยกจาก latest attempt Numerical projection hash หมายถึง input ที่ใช้จริง ไม่ใช่ full normalized archive hash Receipt สำหรับ condensed history มาจาก core ที่ยืนยัน immutable manifest เท่านั้น หากยังมี samples engine hash input เองและไม่เชื่อ receipt
+
+Timer stop ที่ท้าย session ไม่สร้าง pause ให้ block ก่อนหน้า Fixture stop ที่ 450 s แทน 480 s ให้ observed pause 30 s, recorded timer total 480 s และ derived total 450 s พร้อม `timerTotalsDisagree` Source records/summary ไม่ถูกแก้ และ window ที่ข้าม stop ถูก reject แม้ center อยู่ก่อน stop
+
+ความสำเร็จข้างต้นปิด software-positive path เท่านั้น **G1/G2 ส่วน human reference, G3/G4 empirical uncertainty/sample-size plan และ G5 physiological release ยังไม่ผ่าน** ไม่มีสิทธิ์อ้าง validated lactate LT, person-level empirical CI, automatic zones หรือ Kubios-equivalent preprocessing [reproduction record](lt-engine-reproduction.md) ระบุ pins, license, tolerances และคำสั่งที่รันได้
