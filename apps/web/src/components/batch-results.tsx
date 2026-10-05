@@ -1,51 +1,67 @@
 import { Link } from "@tanstack/react-router";
 
-import type { BatchCreateResponse } from "../lib/api-types";
-import { formatApiError } from "../lib/copy";
+import type { RunImportResult } from "../lib/runs-types";
 
-export function BatchResults({ result }: { result: BatchCreateResponse }) {
+export function BatchResults({ result }: { result: RunImportResult }) {
+  const { imported, duplicate, unsupported, failed } = result.counts;
+  const warningCount = result.items.reduce((count, item) => count + item.warnings.length, 0);
+  const partialSuccess = imported + duplicate > 0 && unsupported + failed > 0;
+  const labels = {
+    imported: "นำเข้าแล้ว",
+    duplicate: "ซ้ำกับกิจกรรมที่มีอยู่",
+    unsupported: "ไม่รองรับ",
+    failed: "นำเข้าไม่สำเร็จ",
+  };
+
   return (
-    <section className="card results-card" aria-labelledby="batch-results-title">
+    <section className="card results-card" aria-labelledby="batch-results-title" aria-live="polite">
       <div className="section-heading">
         <div>
-          <h2 id="batch-results-title">ผลการแยกข้อมูลจาก ZIP</h2>
+          <h2 id="batch-results-title">{partialSuccess ? "นำเข้าสำเร็จบางส่วน" : "ผลการนำเข้า"}</h2>
           <p className="section-note">
-            เปิดรายการที่สำเร็จเพื่อดูผลวิเคราะห์ หรือดาวน์โหลดข้อมูลต้นฉบับ
+            นำเข้า {imported} · ซ้ำ {duplicate} · ไม่รองรับ {unsupported} · ไม่สำเร็จ {failed} · คำเตือน {warningCount}
           </p>
+          {imported > 0 ? (
+            <p className="section-note">
+              รับกิจกรรมที่นำเข้าแล้วเข้าคิวประมวลผล ผลวิเคราะห์อาจยังไม่พร้อม เปิดรายละเอียดเพื่อตรวจสอบสถานะ
+            </p>
+          ) : null}
         </div>
-        <span className="selection-count">
-          {result.items.length} ไฟล์
-        </span>
+        <span className="selection-count">{result.items.length} รายการ</span>
       </div>
       <ul className="result-list">
         {result.items.map((item) => {
-          const succeeded = item.status === "succeeded";
+          const statusClass = item.status === "imported"
+            ? "success"
+            : item.status === "failed" ? "failed" : "section-note";
+          const activityId = item.status === "imported" || item.status === "duplicate" ? item.activityId : null;
           return (
             <li
-              key={item.id}
+              key={`${result.batchId}-${item.index}`}
               className="result-row"
               data-testid="batch-result"
+              data-status={item.status}
             >
               <div className="result-summary">
-                <span
-                  className={`status-dot ${succeeded ? "success" : "failed"}`}
-                  aria-hidden="true"
-                />
-                <span className="result-copy">
-                  <strong>{item.fileName}</strong>
-                  <span className={succeeded ? "success" : "failed"}>
-                    {succeeded ? " · สำเร็จ" : " · ไม่สำเร็จ"}
-                  </span>
-                  {!succeeded && item.error ? (
-                    <span className="result-error">{formatApiError(item.error)}</span>
+                <span className={`status-dot ${statusClass}`} aria-hidden="true" />
+                <div className="result-copy">
+                  <strong>{item.name}</strong>
+                  <span className={statusClass}> · {labels[item.status]}</span>
+                  {item.reason ? (
+                    <div className={item.status === "failed" ? "result-error" : "section-note"}>{item.reason}</div>
                   ) : null}
-                </span>
+                  {item.warnings.length > 0 ? (
+                    <ul className="section-note" aria-label={`คำเตือนของ ${item.name}`}>
+                      {item.warnings.map((warning, index) => <li key={index}>{warning}</li>)}
+                    </ul>
+                  ) : null}
+                </div>
               </div>
-              {succeeded ? (
+              {activityId ? (
                 <Link
                   className="button secondary"
                   to="/extractions/$id"
-                  params={{ id: item.id }}
+                  params={{ id: activityId }}
                   search={{ offset: 0, order: "desc" }}
                 >
                   ดูรายละเอียด

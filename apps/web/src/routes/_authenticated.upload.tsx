@@ -3,8 +3,9 @@ import { useState } from "react";
 
 import { BatchResults } from "../components/batch-results";
 import { UploadDropzone } from "../components/upload-dropzone";
-import { ApiError, createExtractions, startGoogleLogin } from "../lib/api";
-import type { BatchCreateResponse } from "../lib/api-types";
+import { ApiError, startGoogleLogin } from "../lib/api";
+import { importRuns } from "../lib/runs-api";
+import type { RunImportResult } from "../lib/runs-types";
 import { formatApiError } from "../lib/copy";
 import { Route as RootRoute } from "./__root";
 
@@ -14,15 +15,16 @@ function UploadPage() {
   const router = useRouter();
   const { user } = RootRoute.useLoaderData();
   const [files, setFiles] = useState<File[]>([]);
-  const [result, setResult] = useState<BatchCreateResponse | null>(null);
+  const [result, setResult] = useState<RunImportResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
 
   async function submit() {
     setError(null);
+    setResult(null);
     setUploading(true);
     try {
-      setResult(await createExtractions(files));
+      setResult(await importRuns(files));
       await router.invalidate();
     } catch (cause) {
       setError(
@@ -45,10 +47,10 @@ function UploadPage() {
     <div className="page-stack">
       <header className="page-intro">
         <div>
-          <h1>อัปโหลดไฟล์ ZIP จาก Garmin</h1>
+          <h1>อัปโหลดไฟล์ FIT หรือ ZIP จาก Garmin</h1>
           <p className="page-lede">
-            อัปโหลดไฟล์ ZIP ได้ครั้งละ 1–10 ไฟล์ ขนาดไม่เกิน 20 เมกะไบต์ต่อไฟล์
-            ระบบจะแยกไฟล์ FIT ออกมาอ่าน แล้วลบทิ้งหลังประมวลผลเสร็จ
+            อัปโหลดไฟล์ FIT โดยตรงหรือ ZIP ได้ครั้งละ 1–10 ไฟล์ ไฟล์ต้องไม่ว่างและไม่เกิน 20 MiB ต่อไฟล์
+            ระบบเก็บ OriginalFIT เป็นส่วนตัวเพื่อประมวลผลใหม่ ส่วน ZIP ใช้รับไฟล์เข้าระบบเท่านั้น
           </p>
         </div>
         <Link
@@ -62,11 +64,11 @@ function UploadPage() {
 
       <section className="download-guide card" aria-labelledby="download-guide-title">
         <div className="download-guide-intro">
-          <span className="download-guide-kicker">Garmin website only</span>
-          <h2 id="download-guide-title">ยังไม่มีไฟล์ ZIP? ดาวน์โหลดจาก Garmin Connect ตามนี้ได้เลย</h2>
+          <span className="download-guide-kicker">Garmin Connect</span>
+          <h2 id="download-guide-title">ยังไม่มีไฟล์? ดาวน์โหลด Original จาก Garmin Connect</h2>
           <p>
-            ตอนนี้การเอาไฟล์เข้าระบบต้องใช้ <strong>ไฟล์ .zip</strong> ที่ดาวน์โหลดจาก
-            <strong> Garmin Connect website</strong> เท่านั้น แล้วค่อยกลับมาอัปโหลดที่หน้านี้
+            รับทั้ง <strong>ไฟล์ .fit</strong> โดยตรงและ <strong>ไฟล์ .zip</strong> ที่มี FIT อยู่ภายใน
+            ถ้าต้องการดาวน์โหลดจาก <strong>Garmin Connect website</strong> ให้ทำตามขั้นตอนนี้
           </p>
           <div className="download-guide-links" aria-label="ลิงก์ไปยัง Garmin Connect">
             <a href="https://connect.garmin.com/app/home" rel="noreferrer" target="_blank">
@@ -124,8 +126,8 @@ function UploadPage() {
               05
             </span>
             <div>
-              <h3>เลือก Export File</h3>
-              <p>ในเมนูจะมีหลายตัวเลือก ให้เลือก Export File แบบปกติเพื่อดาวน์โหลด .zip</p>
+              <h3>เลือก Export Original</h3>
+              <p>เลือก Export Original เพื่อดาวน์โหลดไฟล์ต้นฉบับ ซึ่งอาจเป็น .fit หรือ .zip ที่มี FIT อยู่ภายใน</p>
             </div>
           </li>
           <li>
@@ -133,7 +135,7 @@ function UploadPage() {
               06
             </span>
             <div>
-              <h3>กลับมาอัปโหลดไฟล์ .zip ที่นี่</h3>
+              <h3>กลับมาอัปโหลดไฟล์ .fit หรือ .zip ที่นี่</h3>
               <p>เมื่อได้ไฟล์แล้ว คุณสามารถลากมาวางหรือกดเลือกไฟล์จากคอมพิวเตอร์ได้ทันที</p>
             </div>
           </li>
@@ -143,7 +145,7 @@ function UploadPage() {
           <strong>หมายเหตุ</strong>
           <p>
             ถ้าหาเมนู export ไม่เจอ ให้เริ่มจากมองหา <strong>รูปเฟือง</strong> ก่อน
-            จากนั้นเลือก <strong>Export File</strong> แบบธรรมดา ไม่ต้องเลือก export ชนิดอื่น
+            จากนั้นเลือก <strong>Export Original</strong> ไม่ใช่ GPX หรือ TCX
           </p>
         </div>
       </section>
@@ -162,8 +164,8 @@ function UploadPage() {
               <p className="upload-access-label">พร้อมอัปโหลดเมื่อคุณพร้อม</p>
               <h2 id="upload-access-title">อ่าน guide ได้ก่อน โดยยังไม่ต้องเข้าสู่ระบบ</h2>
               <p>
-                เมื่อมีไฟล์ ZIP จาก Garmin Connect แล้ว ค่อยเข้าสู่ระบบด้วย Google
-                เพื่อเลือกไฟล์และเริ่มแยกข้อมูล FIT
+                เมื่อมีไฟล์ FIT หรือ ZIP จาก Garmin แล้ว ค่อยเข้าสู่ระบบด้วย Google
+                เพื่อเลือกไฟล์และนำเข้าข้อมูลวิ่ง
               </p>
             </div>
             <button type="button" onClick={startGoogleLogin}>
@@ -173,11 +175,11 @@ function UploadPage() {
         )}
         <aside className="constraints-panel" aria-labelledby="constraints-title">
           <h2 id="constraints-title">ข้อกำหนดการอัปโหลด</h2>
-          <p>ไฟล์ ZIP ต้นฉบับจะถูกเก็บเป็นส่วนตัว ไฟล์ FIT ที่แยกออกมาจะถูกลบทิ้งหลังประมวลผล</p>
+          <p>OriginalFIT เก็บเป็นส่วนตัวเพื่อประมวลผลใหม่ ZIP ใช้รับไฟล์เข้าระบบเท่านั้น การนำเข้าสำเร็จไม่ได้หมายความว่าผลวิเคราะห์พร้อมแล้ว</p>
           <ul className="constraint-list">
             <li>
               <span className="constraint-label">ไฟล์ที่รับ</span>
-              <span className="constraint-value">ไฟล์ ZIP</span>
+              <span className="constraint-value">FIT หรือ ZIP ที่มี FIT</span>
             </li>
             <li>
               <span className="constraint-label">จำนวนไฟล์ต่อครั้ง</span>
@@ -185,7 +187,11 @@ function UploadPage() {
             </li>
             <li>
               <span className="constraint-label">ขนาดสูงสุด</span>
-              <span className="constraint-value">20 เมกะไบต์ต่อไฟล์</span>
+              <span className="constraint-value">มากกว่า 0 และไม่เกิน 20 MiB ต่อไฟล์</span>
+            </li>
+            <li>
+              <span className="constraint-label">ชื่อไฟล์</span>
+              <span className="constraint-value">ไม่เกิน 255 ไบต์ UTF-8 และไม่มีอักขระควบคุม</span>
             </li>
           </ul>
         </aside>

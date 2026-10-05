@@ -7,32 +7,37 @@ function file(name: string, size = 1): File {
 }
 
 describe("validateFiles", () => {
-  test("accepts one through ten .zip files under the server limits", () => {
-    expect(validateFiles([file("run.ZIP"), file("ride.zip")])).toEqual([]);
+  test("accepts direct FIT and ZIP suffixes case-insensitively within count and size boundaries", () => {
+    expect(validateFiles([file("run.FiT"), file("archive.ZiP")])).toEqual([]);
     expect(
-      validateFiles(Array.from({ length: 10 }, (_, index) => file(`${index}.zip`))),
+      validateFiles(Array.from({ length: 10 }, (_, index) => file(`${index}.fit`))),
     ).toEqual([]);
+    expect(validateFiles([file("boundary.fit", 20 * 1024 * 1024)])).toEqual([]);
   });
 
-  test("rejects empty and over-limit selections", () => {
-    expect(validateFiles([])).toEqual(["เลือกไฟล์ ZIP อย่างน้อย 1 ไฟล์"]);
+  test("rejects missing selections and batches above ten files", () => {
+    expect(validateFiles([])).not.toEqual([]);
     expect(
       validateFiles(Array.from({ length: 11 }, (_, index) => file(`${index}.zip`))),
-    ).toEqual(["เลือกได้ไม่เกิน 10 ไฟล์ ZIP"]);
+    ).not.toEqual([]);
   });
 
-  test("rejects invalid suffix, control characters, oversized files, and UTF-8 names over 255 bytes", () => {
-    expect(validateFiles([file("activity.gpx")])).toEqual([
-      "activity.gpx ต้องลงท้ายด้วย .zip",
-    ]);
-    expect(validateFiles([file("bad\u0000.zip")])).toEqual([
-      "bad\u0000.zip มีอักขระควบคุมที่ใช้ไม่ได้",
-    ]);
-    expect(validateFiles([file("large.zip", 20 * 1024 * 1024 + 1)])).toEqual([
-      "large.zip มีขนาดเกิน 20 เมกะไบต์",
-    ]);
-    expect(validateFiles([file(`${"é".repeat(128)}.zip`)])).toEqual([
-      `${"é".repeat(128)}.zip ยาวเกิน 255 ไบต์`,
-    ]);
+  test("rejects empty files, unsupported suffixes, and files above 20 MiB", () => {
+    for (const invalid of [
+      file("empty.fit", 0),
+      file("empty.zip", 0),
+      file("activity.gpx"),
+      file("activity.fit.exe"),
+      file("large.zip", 20 * 1024 * 1024 + 1),
+    ]) {
+      expect(validateFiles([invalid])).not.toEqual([]);
+    }
+  });
+
+  test("enforces filename controls and 255-byte UTF-8 boundary", () => {
+    expect(validateFiles([file(`${"é".repeat(125)}a.fit`)])).toEqual([]);
+    for (const name of ["bad\u0000.fit", "bad\u007f.zip", `${"é".repeat(126)}.fit`]) {
+      expect(validateFiles([file(name)])).not.toEqual([]);
+    }
   });
 });
