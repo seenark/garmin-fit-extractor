@@ -7,3 +7,4 @@ pub mod error;
 pub mod fit;
 pub mod model;
 pub mod routes;
+pub mod runs;

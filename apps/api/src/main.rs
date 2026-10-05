@@ -9,8 +9,14 @@ use garmin_fit_extractor_api::{
 use tokio::net::TcpListener;
 use tracing_subscriber::EnvFilter;
 
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn Error>> {
+fn main() -> Result<(), Box<dyn Error>> {
+    if let Some(status) = garmin_fit_extractor_api::runs::process::child_mode() {
+        std::process::exit(status);
+    }
+    tokio::runtime::Builder::new_multi_thread().enable_all().build()?.block_on(async_main())
+}
+
+async fn async_main() -> Result<(), Box<dyn Error>> {
     tracing_subscriber::fmt()
         .with_env_filter(
             EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")),
@@ -19,6 +25,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     let config = Config::from_env()?;
     let db = db::connect(&config.database_url).await?;
+    garmin_fit_extractor_api::runs::jobs::start_worker(db.clone());
     let listener = TcpListener::bind(config.bind).await?;
     let auth = Arc::new(
         AuthState::new(config.google, config.coach_oauth).with_admin_emails(config.admin_emails),

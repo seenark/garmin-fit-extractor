@@ -12,6 +12,16 @@ use crate::model::{ApiErrorBody, ApiErrorDetail};
 pub enum FitError {
     #[error("FIT payload is invalid")]
     InvalidFit,
+    #[error("{code}: {reason}")]
+    UnsupportedRun {
+        code: &'static str,
+        reason: &'static str,
+    },
+    #[error("{code}: {reason}")]
+    ProcessingFailed {
+        code: &'static str,
+        reason: &'static str,
+    },
 }
 
 #[derive(Clone, Debug)]
@@ -52,7 +62,7 @@ impl ApiError {
         Self::new(
             StatusCode::BAD_REQUEST,
             "EMPTY_BATCH",
-            "Upload at least one ZIP file.",
+            "Upload at least one FIT or ZIP file.",
         )
     }
     pub const fn unknown_field() -> Self {
@@ -66,7 +76,7 @@ impl ApiError {
         Self::new(
             StatusCode::BAD_REQUEST,
             "TOO_MANY_FILES",
-            "Upload at most 10 ZIP files.",
+            "Upload at most 10 FIT or ZIP files.",
         )
     }
     pub const fn request_too_large() -> Self {
@@ -129,7 +139,7 @@ impl ApiError {
         Self::new(
             StatusCode::NOT_FOUND,
             "NOT_FOUND",
-            "Extraction was not found.",
+            "Run activity was not found.",
         )
     }
     pub const fn api_route_not_found() -> Self {
