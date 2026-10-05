@@ -2,6 +2,12 @@
 
 คู่มือนี้ deploy เว็บ Runner’s Garage ด้วย Docker และ Cloudflare Tunnel โดยใช้ Google OAuth จริง แต่ยังไม่ตั้งค่า ChatGPT/Custom GPT. ทำตามลำดับและแทนค่าทุก `REPLACE_WITH_*` ก่อนรัน
 
+These are operator instructions, not evidence that the Runs cutover is deployed
+or verified. Core must be merged and combined runtime, privacy, deletion,
+recovery, and browser checks must pass before using this branch for cutover.
+No production deployment, legacy migration apply, or Runs reset is claimed.
+Do not use this persistent Compose stack for disposable tests.
+
 ## ภาพรวมและค่าที่ต้องเตรียม
 
 - Docker Hub repository เริ่มต้นคือ `hadesgod/garmin-fit-extractor`
@@ -146,7 +152,7 @@ cloudflared tunnel route dns REPLACE_WITH_TUNNEL_NAME REPLACE_WITH_HOST
 cloudflared tunnel --config REPLACE_WITH_CLOUDFLARED_CONFIG tunnel run REPLACE_WITH_TUNNEL_NAME
 ```
 
-ใน config ให้ Cloudflare Tunnel ชี้ไปที่ `http://127.0.0.1:8100` (หรือ address ของ Docker host ที่ publish port นี้) และให้ tunnel ใช้ `REPLACE_WITH_HOST`. ภายใน container แอปยังฟังที่ port `3000`; compose ทำหน้าที่ map host `8100 -> 3000` ให้เอง. Application routing จัดการ `/oauth/*`, `/api/v1/*` และหน้า SPA/upload เอง ไม่ต้องสร้าง route แยกสำหรับแต่ละ path. Cloudflare Service Token ไม่ใช่ user identity และห้ามนำมาแทน Google session หรือ bearer OAuth ของ FIT Coach
+ใน config ให้ Cloudflare Tunnel ชี้ไปที่ `http://127.0.0.1:8100` (หรือ address ของ Docker host ที่ publish port นี้) และให้ tunnel ใช้ `REPLACE_WITH_HOST`. ภายใน container แอปยังฟังที่ port `3000`; compose ทำหน้าที่ map host `8100 -> 3000` ให้เอง. Application routing จัดการ `/oauth/*`, `/api/v1/*`, `/api/v2/runs/*` และหน้า SPA/upload เอง ไม่ต้องสร้าง route แยกสำหรับแต่ละ path. Cloudflare Service Token ไม่ใช่ user identity และห้ามนำมาแทน Google session หรือ bearer OAuth ของ FIT Coach
 
 ตรวจจากอินเทอร์เน็ต:
 
@@ -176,6 +182,25 @@ docker compose start garmin-fit-extractor
 
 แทน `REPLACE_WITH_DATE` เช่น `2026-08-13`. เก็บ dump นอก host และทดสอบการกู้คืนตามนโยบายองค์กร. ห้ามลบ `db-data`; หากต้องหยุดชั่วคราวใช้ `docker compose stop` หรือ `docker compose down` โดยไม่ใส่ `-v`. ฐาน SQLite เดิมต้องสำรอง/เก็บแยกตาม runbook migration ไม่ควร mount เข้า unified service
 
+A PostgreSQL backup for Runs must preserve original FIT BYTEA, owner scope,
+revision manifests, job/evidence state, and source hashes together. Rehearse
+restore in a new disposable PostgreSQL 18 target, compare original bytes and
+hashes, check coherent revisions/orphans, and re-decode the retained source.
+Container recreation must not reset Runs. Backup artifacts can retain deleted
+data; define restricted encrypted retention and deletion policy separately.
+
 ## 7. ขอบเขตของ deployment นี้
 
-เมื่อ healthz และ Google login ผ่านแล้ว เว็บพร้อมใช้งาน: ผู้ใช้ upload FIT และอ่าน history ด้วย Google session ได้ตามปกติ. PostgreSQL เป็น runtime database เดียวของ unified service; ฐาน SQLite เดิมต้องหยุดและเก็บไว้นอก stack จนกว่าจะยอมรับผล migration. ยังไม่ต้องตั้งค่า `GARMIN_FIT_CHATGPT_*`, ไม่ต้องสร้าง Custom GPT, ไม่ต้อง import OpenAPI, ไม่ต้องตั้ง OAuth callback ของ GPT และไม่ต้องสร้าง fake credentials. เมื่อพร้อมทำ integration ภายหลัง ค่อยใช้ client ID `FIT_COACH_CHATGPT`, secret จริงที่เก็บนอก repository และ callback URL exact ที่ GPT editor แสดง; อย่าใส่ค่าดังกล่าวลงคู่มือนี้หรือใน image
+Health and real Google login are only two checks, not proof that Runs import,
+jobs, export privacy, deletion, or recovery works. Observe the combined
+workflow before allowing traffic. PostgreSQL remains the unified runtime
+database; keep stopped SQLite sources outside the stack until an explicitly
+authorized migration is accepted. Source-less legacy rows remain read-only
+with fidelity warnings, not automatically reset.
+
+Runs manual JSON/prompt handoff does not require `GARMIN_FIT_CHATGPT_*`, a Custom
+GPT, OpenAPI import, or runtime LLM credentials. The separate preserved FIT
+Coach OAuth integration still uses client ID `FIT_COACH_CHATGPT`, a real secret
+stored outside the repository, and the exact callback shown by the GPT editor.
+Do not put those values in this guide or image. Deployment and startup do not
+authorize a Runs reset.

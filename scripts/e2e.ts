@@ -1,4 +1,5 @@
-import { join, resolve } from "node:path";
+import { SQL } from "bun";
+import { isAbsolute, resolve } from "node:path";
 
 const repositoryRoot = resolve(import.meta.dir, "..");
 const bun = process.execPath;
@@ -8,6 +9,40 @@ const apiAddress = "127.0.0.1:3000";
 const webAddress = "127.0.0.1:5173";
 const healthUrl = `http://${webAddress}/healthz`;
 const readinessTimeoutMs = 60_000;
+
+export function testDatabaseConfiguration(): { databaseUrl: string; pgdata: string } {
+  const databaseUrl = process.env.TEST_DATABASE_URL;
+  const pgdata = process.env.PGDATA;
+  let url: URL;
+  try {
+    url = new URL(databaseUrl ?? "");
+  } catch {
+    throw new Error("TEST_DATABASE_URL must explicitly identify disposable PostgreSQL.");
+  }
+  if (
+    !["postgres:", "postgresql:"].includes(url.protocol) ||
+    !url.hostname || !url.username || url.pathname.length < 2 ||
+    !pgdata || !isAbsolute(pgdata)
+  ) {
+    throw new Error("Tests require explicit disposable TEST_DATABASE_URL and absolute PGDATA.");
+  }
+  return { databaseUrl: databaseUrl!, pgdata };
+}
+
+async function verifyTestDatabase(databaseUrl: string, pgdata: string): Promise<void> {
+  const sql = new SQL(databaseUrl, { max: 1, connectionTimeout: 5 });
+  try {
+    const [identity] = await sql`
+      SELECT current_setting('data_directory') AS directory,
+             current_setting('server_version_num')::integer AS version
+    `;
+    if (identity.directory !== pgdata || identity.version < 180000 || identity.version >= 190000) {
+      throw new Error("Tests require the exact PGDATA identity of disposable PostgreSQL 18.");
+    }
+  } finally {
+    await sql.close();
+  }
+}
 
 type ManagedProcess = {
   readonly label: string;
@@ -92,37 +127,58 @@ async function waitForHealth(api: ManagedProcess, web: ManagedProcess): Promise<
 }
 
 async function run(): Promise<void> {
-  const databaseUrl = process.env.TEST_DATABASE_URL;
-  if (!databaseUrl?.startsWith("postgres://") && !databaseUrl?.startsWith("postgresql://")) {
-    throw new Error(
-      "bun run test:e2e requires TEST_DATABASE_URL pointing to disposable PostgreSQL",
-    );
-  }
-  const environment = {
+  const { databaseUrl, pgdata } = testDatabaseConfiguration();
+  await verifyTestDatabase(databaseUrl, pgdata);
+  const environment: Record<string, string | undefined> = {
     ...process.env,
     GARMIN_FIT_BIND: apiAddress,
     DATABASE_URL: databaseUrl,
     GARMIN_FIT_TEST_AUTH: "true",
   };
-  const cargoTargetDirectory = resolve(
-    repositoryRoot,
-    environment.CARGO_TARGET_DIR ?? "target",
-  );
+  const testMode = process.argv.slice(2).includes("--test");
   const started: ManagedProcess[] = [];
   let failure: unknown;
 
   try {
     const build = Bun.spawn(
-      [cargo, "build", "-p", "garmin-fit-extractor-api"],
-      { cwd: repositoryRoot, env: environment, stdout: "inherit", stderr: "inherit" },
+      [cargo, "build", "--locked", "-p", "garmin-fit-extractor-api", "--message-format=json-render-diagnostics"],
+      { cwd: repositoryRoot, env: environment, stdout: "pipe", stderr: "inherit" },
     );
+    const buildOutput = await new Response(build.stdout).text();
     if ((await build.exited) !== 0) {
       throw new Error("API build failed.");
+    }
+    const artifacts = buildOutput.trim().split("\n").map((line) => JSON.parse(line));
+    const executable = artifacts.find((artifact) =>
+      artifact.reason === "compiler-artifact" &&
+      artifact.target.name === "garmin-fit-extractor-api" &&
+      artifact.target.kind.includes("bin") &&
+      artifact.executable
+    )?.executable;
+    if (!executable) {
+      throw new Error("Cargo did not report the freshly built API executable.");
+    }
+    delete environment.RUNS_DECODER_EXECUTABLE;
+
+    if (testMode) {
+      environment.RUNS_DECODER_EXECUTABLE = executable;
+      for (const command of [
+        [bun, "--no-env-file", "run", "--filter", "*", "test"],
+        [cargo, "test", "--locked", "--workspace", "--", "--test-threads=1"],
+      ]) {
+        const child = Bun.spawn(command, {
+          cwd: repositoryRoot, env: environment, stdout: "inherit", stderr: "inherit",
+        });
+        if ((await child.exited) !== 0) {
+          throw new Error(`${command[0]} tests failed.`);
+        }
+      }
+      return;
     }
 
     const browser = startProcess(
       "Playwright browser installation",
-      [bunx, "--no-install", "playwright", "install", "chromium"],
+      [bunx, "--no-env-file", "--no-install", "playwright", "install", "chromium"],
       environment,
       resolve(repositoryRoot, "apps/web"),
     );
@@ -133,7 +189,7 @@ async function run(): Promise<void> {
 
     const api = startProcess(
       "API",
-      [resolve(cargoTargetDirectory, "debug/garmin-fit-extractor-api")],
+      [executable],
       environment,
     );
     started.push(api);
@@ -142,6 +198,7 @@ async function run(): Promise<void> {
       "web server",
       [
         bunx,
+        "--no-env-file",
         "--no-install",
         "vite",
         "--host",
@@ -161,6 +218,7 @@ async function run(): Promise<void> {
       "Playwright",
       [
         bunx,
+        "--no-env-file",
         "--no-install",
         "playwright",
         "test",
@@ -199,4 +257,6 @@ async function run(): Promise<void> {
   }
 }
 
-await run();
+if (import.meta.main) {
+  await run();
+}
