@@ -132,12 +132,11 @@ impl Deserializer {
         self.position += header.header_size() as usize;
         self.crc = 0;
 
-        // Check CRC if the header was 14 bytes. If the value is 0 treat it like the CRC doesn't
-        // exist. This behavior doesn't appear to be documented but was verified using the
-        // FitTestTool.jar utility included with the SDK.
+        // The optional CRC is fixed at bytes 12–13 and covers the first 12 bytes.
+        // Future header extensions still participate in the final file CRC.
         let crc_value = header.crc().unwrap_or(0);
         if crc_value > 0 {
-            let checksum = caculate_crc(&input[0..(header.header_size() - 2) as usize]);
+            let checksum = caculate_crc(&input[0..12]);
             if !self
                 .options
                 .contains(&DecodeOption::SkipHeaderCrcValidation)
@@ -150,6 +149,7 @@ impl Deserializer {
                     checksum,
                 ))));
             }
+            self.crc = update_crc(0, &input[14..header.header_size() as usize]);
         } else {
             // if the header doesn't have its own CRC then the header bytes are included in
             // the data CRC

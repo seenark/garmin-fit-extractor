@@ -11,6 +11,11 @@ are included. Upstream tests that require those fixtures are omitted. Local
 public-interface regressions construct original synthetic FIT files in memory.
 
 Local patches:
+- File headers consume the declared size (minimum 12 bytes), not a fixed
+  12/14-byte prefix. The optional CRC stays at bytes 12–13 and validates bytes
+  0–11. Unknown extension bytes are opaque, advance the data boundary, and
+  participate in the final file CRC. A 13-byte header has no complete optional
+  CRC field; its extra byte participates in the final file CRC.
 - Component extraction rejects incomplete bit ranges instead of reading absent
   bits as zero. Expanded arrays contain only complete encoded components.
   Encoded zero remains valid, including at an accumulated-component rollover.
@@ -43,8 +48,9 @@ Local patches:
   number. The archive caller can report missing-description warnings. Default
   decoding still rejects missing developer descriptions.
 
-Default decoding remains unchanged except for the component bounds and
-accumulation corrections. Neither opt-in archive option is enabled implicitly.
+Default decoding remains unchanged except for the component bounds,
+accumulation, and extended-header corrections. Neither opt-in archive option
+is enabled implicitly.
 
 Scoped verification:
   cargo test --manifest-path vendor/fitparser/Cargo.toml --test components

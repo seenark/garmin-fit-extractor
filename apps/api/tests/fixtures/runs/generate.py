@@ -286,9 +286,43 @@ def run_cases():
     extended += struct.pack("<H", crc(extended))
     extended += valid[14:-2]
     extended += struct.pack("<H", crc(extended))
-    add("garmin_extended_header16.fit", extended, ["extended_header", "runs_header_policy"],
-        {"accepted": False, "error": "InvalidFit", "valid_crc": True,
-         "reason": "Runs integrity policy accepts only explicitly supported12/14-byte headers."})
+    add("garmin_extended_header16.fit", extended, features + ["extended_header", "zero_header_crc", "unknown_header_extensions"],
+        {**run_oracle(), "accepted": True, "valid_crc": True,
+         "header_crc": "Zero at bytes12-13 means absent; bytes14-15 are opaque extensions covered by the full file CRC."})
+    for header_size, extension in [(16, b"\xA5\x5A"), (15, b"\xA5"), (13, b"\xA5")]:
+        header = bytes([header_size]) + valid[1:12]
+        if header_size >= 14:
+            header_crc = crc(header)
+            assert header_crc != 0
+            header += struct.pack("<H", header_crc)
+        header += extension
+        extended_valid = header + valid[14:-2]
+        extended_valid += struct.pack("<H", crc(extended_valid))
+        name = "garmin_extended_header16_crc.fit" if header_size == 16 else f"garmin_extended_header{header_size}.fit"
+        add(name, extended_valid, features + ["extended_header", "unknown_header_extensions"],
+            {**run_oracle(), "accepted": True, "valid_crc": True, "header_size": header_size,
+             "header_crc": "Nonzero bytes12-13 cover only bytes0-11." if header_size >= 14 else
+                           "A13-byte header has no complete optional header CRC; byte12 is opaque.",
+             "header_extension_hex": extension.hex(),
+             "file_crc": "Full file CRC covers every declared header byte and the unchanged Garmin run body."})
+        if header_size == 16:
+            bad_header = bytearray(extended_valid)
+            bad_header[12] ^= 1
+            bad_header[-2:] = struct.pack("<H", crc(bad_header[:-2]))
+            add("garmin_extended_header16_bad_header_crc.fit", bytes(bad_header),
+                ["extended_header", "bad_header_crc", "unknown_header_extensions"],
+                {"accepted": False, "error": "InvalidFit", "valid_crc": True,
+                 "reason": "Header CRC is corrupt while the recomputed full file CRC is valid."})
+            bad_extension = bytearray(extended_valid)
+            bad_extension[14] ^= 1
+            add("garmin_extended_header16_bad_extension_crc.fit", bytes(bad_extension),
+                ["extended_header", "bad_file_crc", "unknown_header_extensions"],
+                {"accepted": False, "error": "InvalidFit", "valid_crc": False,
+                 "reason": "An opaque extension byte is corrupt; header CRC stays valid and the unchanged full file CRC fails."})
+            add("garmin_extended_header16_truncated.fit", extended_valid[:14],
+                ["extended_header", "truncation"],
+                {"accepted": False, "error": "InvalidFit",
+                 "reason": "Header declares16 bytes but only the first14 exist; no data or footer follows."})
     big = definition(0, 20, [(253, 4, U32), (3, 1, U8), (6, 2, U16),
                             (240, 2, U16), (241, 1, U8)], architecture=1)
     big += data(0, struct.pack(">IBHHB", T, 0, 0, 54321, 255))
@@ -498,6 +532,10 @@ def archive_cases():
 
 
 FIELD_DICTIONARY = {
+    "FIT_header": {"0": "header_size uint8: declared length at least12", "1": "protocol_version uint8",
+                   "2-3": "profile_version uint16 little-endian", "4-7": "data_size uint32 little-endian",
+                   "8-11": "data_type literal .FIT", "12-13": "optional header CRC uint16 little-endian when header_size >=14; nonzero covers bytes0-11, zero means absent",
+                   "unknown_extensions": "Opaque declared header bytes at offsets14 onward, or byte12 for a13-byte header without a complete optional CRC; every header byte participates in the full file CRC"},
     "0:file_id": {"0": "type enum: activity4", "1": "manufacturer uint16: Garmin1, Wahoo32", "2": "product uint16", "3": "serial_number uint32z", "4": "time_created FITseconds"},
     "2:device_settings": {"0": "active_time_zone uint8", "1": "utc_offset uint32 seconds", "2": "time_offset uint32 seconds", "5": "time_zone_offset sint8 /4 hours"},
     "7:zones_target": {"1": "max_heart_rate uint8 bpm", "2": "threshold_heart_rate uint8 bpm", "5": "hr_calc_type enum: percent_max_hr1"},
