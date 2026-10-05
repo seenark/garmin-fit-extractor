@@ -3,6 +3,7 @@ import { ApiError } from "../lib/api";
 import { ClipboardExportError, createRunExportSession, ExportChangedError, ExportExpiredError } from "../lib/run-export";
 import type { RunExportPreview, RunExportSession } from "../lib/run-export";
 import type { RunExportMode, RunExportSnapshot } from "../lib/runs-types";
+import { RunExportTextReadError } from "../lib/runs-api";
 
 interface ExportProps { activityIds: string[]; historyReady?: boolean; }
 interface ModeProps extends ExportProps { mode: RunExportMode; includeLocation: boolean; includeDeviceIdentifiers: boolean; }
@@ -10,7 +11,10 @@ type Action = "prepare" | "preview" | "copy" | "download";
 
 function exportError(error: unknown): string {
   if (error instanceof ClipboardExportError) return "คัดลอกไม่สำเร็จ ดาวน์โหลด snapshot เดิมได้ ข้อมูลที่เลือกยังอยู่ครบ";
-  if (error instanceof ExportExpiredError || (error instanceof ApiError && error.status === 410)) return "Snapshot หมดอายุแล้ว กดสร้าง snapshot ใหม่ก่อนส่งออกอีกครั้ง";
+  if (error instanceof RunExportTextReadError) return error.reason === "capacity"
+    ? `เบราว์เซอร์ไม่สามารถอ่าน JSON ขนาด ${error.byteLength.toLocaleString("th-TH")} bytes เป็นข้อความทั้งหมดได้เพราะข้อจำกัดขนาดข้อความ ยังไม่ได้คัดลอก ดาวน์โหลด snapshot เดิมแบบเต็มได้`
+    : `อ่าน JSON ขนาด ${error.byteLength.toLocaleString("th-TH")} bytes ไม่ครบถ้วน ยังไม่ได้คัดลอก ดาวน์โหลด snapshot เดิมได้`;
+  if (error instanceof ExportExpiredError || (error instanceof ApiError && error.status === 410)) return "Snapshot หมดอายุหรือถูกเพิกถอนแล้ว กดสร้าง snapshot ใหม่ก่อนส่งออกอีกครั้ง";
   if (error instanceof ApiError) return `${error.message} (${error.code}) — ยังไม่ส่งออกบางส่วนและยังคงรายการที่เลือกไว้`;
   return "ส่งออกไม่สำเร็จ ลองอีกครั้ง รายการที่เลือกยังอยู่ครบ";
 }
@@ -52,16 +56,14 @@ function ModeExport({ activityIds, mode, includeLocation, includeDeviceIdentifie
         setMessage("คัดลอก JSON จาก snapshot นี้แล้ว");
       }
       if (action === "download") {
-        const blob = await current.download(mode);
-        const url = URL.createObjectURL(blob);
+        const url = await current.download(mode);
         const link = document.createElement("a");
         link.href = url;
-        link.download = `runs-${mode}-${snapshot!.generatedAt.replace(/[^0-9TZ]/g, "")}.json`;
+        link.download = `runs-${mode}.json`;
         document.body.append(link);
         link.click();
         link.remove();
-        window.setTimeout(() => URL.revokeObjectURL(url), 30_000);
-        setMessage("ส่งไฟล์ให้เบราว์เซอร์ดาวน์โหลดแล้ว");
+        setMessage("ส่งคำขอดาวน์โหลดให้เบราว์เซอร์แล้ว");
       }
       setCompleted(action);
     } catch (cause) {
@@ -86,18 +88,19 @@ function ModeExport({ activityIds, mode, includeLocation, includeDeviceIdentifie
         <div><dt>หมดอายุ</dt><dd><time dateTime={snapshot.expiresAt}>{snapshot.expiresAt}</time></dd></div>
       </dl>
       <p className="run-export-note">Snapshot ตรึง revisions และ generatedAt ไว้ Copy และ Download ใช้ snapshot เดียวกัน แม้ข้อมูลกิจกรรมจะประมวลผลใหม่</p>
-      {!preview ? <>
-        <p className="muted">ยังไม่ได้โหลดรายการที่ละไว้ ดาวน์โหลดได้โดยไม่โหลด JSON ทั้งหมดเป็นข้อความ ต้องตรวจรายการก่อน Copy</p>
+      {!preview && <>
+        <p className="muted">ตรวจ token ก่อน Copy โดยไม่โหลด JSON ทั้งหมด ดาวน์โหลดไฟล์เต็มได้จาก snapshot เดียวกัน</p>
         <button type="button" className="secondary" disabled={!!busy || expired} aria-busy={busy === "preview"} onClick={() => perform("preview")}>
-          {busy === "preview" ? "กำลังโหลดรายการที่ละไว้…" : "ตรวจรายการที่ละไว้ก่อน Copy"}
+          {busy === "preview" ? "กำลังตรวจ snapshot…" : "ตรวจ snapshot ก่อน Copy"}
         </button>
-      </> : <div className="run-export-omissions">
+      </>}
+      <div className="run-export-omissions">
         <h4>รายการที่ละไว้จริงใน snapshot</h4>
-        {preview.omissions.length === 0 ? <p>ไม่มีรายการที่ละไว้ตามข้อมูลจากเซิร์ฟเวอร์</p> : <ul>{preview.omissions.map((omission, index) => <li key={`${omission.category}-${omission.pathPattern}-${index}`}>
+        {(preview?.omissions ?? snapshot.privacyOmissions).length === 0 ? <p>ไม่มีรายการที่ละไว้ตามข้อมูลจากเซิร์ฟเวอร์</p> : <ul>{(preview?.omissions ?? snapshot.privacyOmissions).map((omission, index) => <li key={`${omission.category}-${omission.pathPattern}-${index}`}>
           <strong>{omission.category}</strong> · {omission.count.toLocaleString("th-TH")} ค่า
           <code>{omission.pathPattern}</code><span>{omission.reason}</span>
         </li>)}</ul>}
-      </div>}
+      </div>
       <div className="run-export-buttons">
         <button type="button" className="secondary" disabled={!preview || !!busy || expired} aria-busy={busy === "copy"} data-state={completed === "copy" ? "success" : error ? "error" : undefined} onClick={() => perform("copy")}>
           {busy === "copy" ? "กำลังคัดลอก…" : `Copy ${mode === "coach" ? "Coach" : "Full"} JSON`}
@@ -106,7 +109,7 @@ function ModeExport({ activityIds, mode, includeLocation, includeDeviceIdentifie
           {busy === "download" ? "กำลังดาวน์โหลด…" : `Download ${mode === "coach" ? "Coach" : "Full"} JSON`}
         </button>
       </div>
-      {expired && <p role="alert" className="error-text">Snapshot หมดอายุแล้ว ต้องสร้าง snapshot ใหม่ ไม่ส่งออกข้อมูลจาก token ที่หมดอายุ</p>}
+      {expired && <p role="alert" className="error-text">Snapshot หมดอายุหรือถูกเพิกถอนแล้ว ต้องสร้าง snapshot ใหม่ก่อนส่งออก</p>}
     </>}
     <p role="status" className="run-export-status">{message}</p>
     {error && <p role="alert" className="error-text">{error}</p>}

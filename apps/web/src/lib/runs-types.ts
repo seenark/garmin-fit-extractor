@@ -27,4 +27,5 @@ export interface RunLatestThresholds { evidenceCutoff: string | null; latestAtte
 export interface RunTrend { items: Array<RunHistoricalThresholds & { activityId: string }>; }
 export interface RunImportResult { batchId: string; items: Array<{ index: number; name: string; status: "imported" | "duplicate" | "unsupported" | "failed"; reason: string | null; activityId: string | null; warnings: string[] }>; counts: { imported: number; duplicate: number; unsupported: number; failed: number }; }
 export type RunExportMode = "coach" | "full";
-export interface RunExportSnapshot { token: string; generatedAt: string; expiresAt: string; byteLength: number; downloadUrl: string; }
+export interface RunPrivacyOmission { category: "location" | "deviceIdentifiers" | "unclassified"; pathPattern: string; count: number; reason: string; }
+export interface RunExportSnapshot { token: string; generatedAt: string; expiresAt: string; byteLength: number; downloadUrl: string; privacyOmissions: RunPrivacyOmission[]; }
