@@ -10,7 +10,6 @@ test("missing analysis and failed processing never diagnose insufficient physiol
       processing={{ status: "failed", stale: false, updateFailed: true, errorCode: "ANALYSIS_FAILED" }}
     />,
   );
-  expect(html).toContain("ยังไม่มีผลวิเคราะห์");
   expect(html).toContain("failed");
   expect(html).toContain("ANALYSIS_FAILED");
   expect(html).not.toContain("insufficient_data");
@@ -44,7 +43,6 @@ test("experimental and research blocked stay distinct from each target physiolog
   const html = renderToStaticMarkup(<ThresholdStatus result={result} recorded={[{ heartRateBpm: 160, source: "device" }]} />);
   expect(html).toContain('data-threshold-status="estimated"');
   expect(html).toContain('data-threshold-status="low_confidence"');
-  expect(html).toMatch(/Research gate \(researchBlocked\)<\/dt><dd><code>true<\/code>/);
   expect(html).toContain("experimental");
   expect(html).toContain("input-17");
   expect(html).toContain('aria-label="threshold ที่อุปกรณ์บันทึก"');

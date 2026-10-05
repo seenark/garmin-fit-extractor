@@ -20,11 +20,13 @@
 
 หน้า history แสดง latest attempt แยกจาก lastAvailable ของแต่ละ target ผลเก่าบอก activity ID, evidence cutoff, computed time และ stale อย่างชัดเจน ไม่ยกค่าจาก cutoff เก่าขึ้นเป็นค่าปัจจุบัน Trend เรียงตาม evidence cutoff ไม่ใช่ computed time ผู้ใช้เปิดดู method, parameters, actual trace, counts, input revision/hash, reasons และ limitations ได้ Suggestions เป็นตัวเลือกที่ปิดได้ ไม่ใช่ maximal prescription
 
-Queued/processing detail ตรวจสถานะใหม่ทุก 3 วินาที ระหว่าง historical stage ยัง pending จะตรวจสถานะต่อแม้ normalized revision พร้อมแล้ว หาก update failed จะแยกข้อผิดพลาดจากผลก่อนหน้าที่ stale กิจกรรมเดิมที่ไม่มี Original FIT ระบุ `sourceUnavailable` และข้อจำกัดอย่างตรงไปตรงมา ไม่มีการสร้าง FIT, normalized streams หรือ trace ที่ไม่เคยมีขึ้นมา และไม่เปิด reprocess
+History และ detail ตรวจสถานะใหม่ทุก 3 วินาทีเมื่อกิจกรรมยัง queued/processing หรือ historical stage ยัง pending โดยตรวจต่อแม้ normalized revision พร้อมแล้ว หาก update failed จะแยกข้อผิดพลาดจากผลก่อนหน้าที่ stale กิจกรรมเดิมที่ไม่มี Original FIT ระบุ `sourceUnavailable` และข้อจำกัดอย่างตรงไปตรงมา ไม่มีการสร้าง FIT, normalized streams หรือ trace ที่ไม่เคยมีขึ้นมา และไม่เปิด reprocess
 
 ## Coach JSON และ Full JSON
 
 ทั้งสองโหมดใช้ explicit selection เดียวกัน แต่สร้าง snapshot token ของแต่ละโหมด การเตรียม snapshot แสดงจำนวนกิจกรรม ขนาด bytes, fixed generatedAt และเวลาหมดอายุ ก่อนโหลดข้อมูลเพื่อ Copy ตัวเลือก location กับ device identifiers เป็นคนละ checkbox และปิดไว้เริ่มต้น การเปลี่ยน selection หรือ privacy ทำให้ต้องเตรียม snapshot ใหม่
+
+เมื่อรายการที่เลือกบนหน้าปัจจุบันมี `processing.historyStatus` เป็น pending หรือ failed จะยังไม่เปิด Prepare หรือสร้าง snapshot ใหม่ จนผลย้อนหลังพร้อม โดยไม่ล้าง selection หรือเรียกสถานะนี้ว่า insufficient_data รายการนอกหน้าปัจจุบันยังต้องผ่านการตรวจครบทุก ID ฝั่ง server; `EXPORT_NOT_READY` เป็นข้อผิดพลาดทั้ง selection ไม่ใช่การส่งออกบางส่วน Snapshot ที่เตรียมไว้แล้วไม่ถูกล้างเพียงเพราะ historical stage เปลี่ยน และ Copy/Download ยังคง GET token เดิมให้ server ตรวจทุกครั้ง
 
 Copy และ Download ใช้ token เดียวกันของโหมดนั้น และ GET token ทุกครั้งเพื่อให้ server ตรวจ owner/expiry/revocation แม้เคยเปิด preview แล้ว ไม่เปลี่ยน token หรือส่งออกเฉพาะ subset เงียบ ๆ Copy ใช้ server text ตาม bytes ของ pretty JSON พร้อม newline ไม่ parse แล้ว stringify ใหม่ Download ใช้ Blob จาก response ของ token เดียวกัน ดังนั้น pinned revisions และ generatedAt ไม่เปลี่ยนเพราะ activity reprocess
 

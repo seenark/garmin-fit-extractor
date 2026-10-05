@@ -51,7 +51,7 @@ function ExtractionDetailPage() {
     {detail.normalized ? <RunCharts key={`${detail.id}:${detail.revisionId}`} normalized={detail.normalized} segments={detail.analysis?.segments ?? []} /> : <section className="card"><h2>ข้อมูลกราฟ</h2><p>{detail.sourceUnavailable ? "ข้อมูลเดิมไม่มี normalized streams ที่ผ่าน Runs v2 จึงไม่สร้างกราฟหรือข้อมูลที่ขาดขึ้นเอง" : processing ? "กราฟพร้อมเมื่อ coherent revision ประมวลผลสำเร็จ" : "ยังไม่มี normalized streams สำหรับกิจกรรมนี้"}</p></section>}
     <ThresholdStatus result={detail.historicalThresholds} recorded={detail.normalized?.deviceReportedThresholds} processing={detail.processing} />
     {detail.analysis ? <section className="card"><h2>คุณภาพข้อมูลและข้อจำกัด</h2><details><summary>ตรวจคุณภาพและ transformations</summary><pre className="raw-json">{JSON.stringify({ quality: detail.analysis.quality, transformations: detail.analysis.transformations, warnings: detail.normalized?.warnings }, null, 2)}</pre></details></section> : null}
-    <RunExportActions activityIds={[detail.id]} />
+    <RunExportActions activityIds={[detail.id]} historyReady={detail.sourceUnavailable || !detail.processing.historyStatus || detail.processing.historyStatus === "ready"} />
     <CoachPromptEditor />
     {detail.revisionId && !detail.sourceUnavailable ? <RunShareCard key={detail.id} run={{ revisionId: detail.revisionId, startTime: detail.startTime, summary: detail.summary }} /> : <section className="card"><h2>PNG</h2><p>ต้องมี coherent revision ของ Runs v2 ก่อนสร้างภาพจากข้อมูลที่ตรึงไว้</p></section>}
   </div>;

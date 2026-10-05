@@ -31,7 +31,7 @@ function HistoryPage() {
   const [target, setTarget] = useState<RunSummary | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const processing = page.items.some(item => item.processing.status === "queued" || item.processing.status === "processing");
+  const processing = page.items.some(item => item.processing.status === "queued" || item.processing.status === "processing" || item.processing.historyStatus === "pending");
   useEffect(() => {
     if (!processing) return;
     const timer = window.setInterval(() => { void router.invalidate(); }, 3000);
@@ -63,7 +63,7 @@ function HistoryPage() {
     </div>
     {error ? <div className="error" role="alert">{error}</div> : null}
     <HistoryTable page={page} search={search} selected={selected} onSelect={select} deletingId={busy ? target?.id ?? null : null} onDelete={setTarget} onPageChange={offset => { void navigate({ to: "/history", search: { offset, order: search.order } }); }} />
-    <RunExportActions activityIds={[...selected]} />
+    <RunExportActions activityIds={[...selected]} historyReady={page.items.every(item => !selected.has(item.id) || item.sourceUnavailable || !item.processing.historyStatus || item.processing.historyStatus === "ready")} />
     <CoachPromptEditor />
     {target ? <ConfirmDeleteDialog title="ลบกิจกรรมนี้ไหม?" description="Original FIT, revisions และข้อมูลกิจกรรมนี้จะถูกลบอย่างถาวร หลักฐาน LT ที่เกี่ยวข้องจะถูกปรับใหม่ การเลือกส่งออกจะไม่ถูกเปลี่ยนเอง" confirmLabel="ลบรายการ" busy={busy} onConfirm={confirmDelete} onCancel={() => setTarget(null)} /> : null}
   </div>;

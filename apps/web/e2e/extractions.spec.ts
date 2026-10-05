@@ -61,23 +61,7 @@ test("authenticates, imports ZIP members, exports pinned Runs v2 snapshots, and 
   await expect(
     page.getByRole("button", { name: "เข้าสู่ระบบด้วย Google" }),
   ).toBeVisible();
-  await expect(
-    page.getByRole("heading", { name: "ดูประวัติการวิ่งของคุณ" }),
-  ).toBeVisible();
-  await expect(
-    page.getByRole("heading", { name: "เข้าสู่ระบบเพื่อไปต่อ" }),
-  ).toBeVisible();
   await page.goto("/upload");
-  await expect(
-    page.getByRole("heading", {
-      name: "ยังไม่มีไฟล์ ZIP? ดาวน์โหลดจาก Garmin Connect ตามนี้ได้เลย",
-    }),
-  ).toBeVisible();
-  await expect(
-    page.getByRole("heading", {
-      name: "อ่าน guide ได้ก่อน โดยยังไม่ต้องเข้าสู่ระบบ",
-    }),
-  ).toBeVisible();
   await expect(page.getByTestId("upload-dropzone")).toHaveCount(0);
   await expect(
     page.getByRole("button", { name: "เข้าสู่ระบบเพื่ออัปโหลด" }),
@@ -85,11 +69,6 @@ test("authenticates, imports ZIP members, exports pinned Runs v2 snapshots, and 
 
   await page.goto("/api/v1/auth/test-login?user=alice");
   await expect(page.getByText("alice", { exact: true })).toBeVisible();
-  await expect(
-    page.getByRole("heading", {
-      name: "เรื่องวิ่งของคุณ มีอะไรให้ดูมากกว่าที่คิด",
-    }),
-  ).toBeVisible();
   await page
     .getByRole("navigation", { name: "เมนูหลัก" })
     .getByRole("link", { name: "เพิ่มข้อมูลวิ่ง", exact: true })

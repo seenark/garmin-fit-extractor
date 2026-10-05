@@ -280,3 +280,33 @@ test("clipboard denial preserves snapshot download while revoked tokens block bo
   await expect(coach.getByRole("button", { name: "Download Coach JSON", exact: true })).toBeDisabled();
   await expect(actions).toContainText("เลือกไว้ 2 กิจกรรม");
 });
+
+test("ready activity with pending historical thresholds keeps selection and unlocks export after polling", async ({ page }) => {
+  await authenticate(page);
+  let historyReady = false;
+  await page.route("**/api/v2/runs?*", route => route.fulfill({ json: {
+    items: [{
+      ...rows[0],
+      processing: { ...rows[0]!.processing, historyStatus: historyReady ? "ready" : "pending" },
+    }],
+    total: 1, limit: 50, offset: 0,
+  } }));
+  await page.goto("/history?offset=0&order=desc");
+  const selected = page.getByRole("checkbox", { name: `เลือกกิจกรรม ${firstId}`, exact: true });
+  await selected.check();
+  const actions = page.getByRole("region", { name: "ส่งออกกิจกรรมที่เลือก", exact: true });
+  await expect(actions).toContainText("เลือกไว้ 1 กิจกรรม");
+  const coach = actions.getByRole("button", { name: "เตรียม Coach JSON", exact: true });
+  const full = actions.getByRole("button", { name: "เตรียม Full JSON", exact: true });
+  await expect(coach).toBeDisabled();
+  await expect(full).toBeDisabled();
+  const polled = page.waitForResponse(response =>
+    new URL(response.url()).pathname === "/api/v2/runs" &&
+    response.request().method() === "GET");
+  historyReady = true;
+  await polled;
+  await expect(coach).toBeEnabled();
+  await expect(full).toBeEnabled();
+  await expect(selected).toBeChecked();
+  await expect(actions).toContainText("เลือกไว้ 1 กิจกรรม");
+});
