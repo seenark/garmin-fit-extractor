@@ -524,11 +524,11 @@ pub fn estimate_history(cutoff:&str,evidence:&[Value])->Value {
                 &&result["trace"]["inputRevision"]==entry.source["normalized"]["sourceRevision"]&&result["trace"]["inputHash"]==json!(entry.input_hash)
                 &&result["trace"]["evidenceCutoff"]==entry.source["normalized"]["endTime"]
         };
-        // A proven sensor change remains binding even if its numerical cache is stale.
+        // Stop at the first proven sensor boundary or verified timed-RR context.
         // Unknown HR-only/stale data cannot define RR context or promote a group.
-        let reference=prepared.first().filter(|entry|entry.recording_scope.is_some())
-            .or_else(||prepared.iter().find(|entry|verified(entry)&&entry.analysis["thresholds"][slot]["trace"]["windows"].as_array()
-                .is_some_and(|windows|windows.iter().any(|window|window["rawBeatCount"].as_u64().is_some_and(|count|count>0)))))
+        let reference=prepared.iter().find(|entry|entry.recording_scope.is_some()
+            ||verified(entry)&&entry.analysis["thresholds"][slot]["trace"]["windows"].as_array()
+                .is_some_and(|windows|windows.iter().any(|window|window["rawBeatCount"].as_u64().is_some_and(|count|count>0))))
             .or_else(||prepared.iter().find(|entry|verified(entry)));
         let scope=reference.and_then(|entry|entry.recording_scope.as_ref());
         let evaluated=|entry:&HistoricalEvidence|verified(entry)&&(scope.is_some_and(|scope|entry.recording_scope.as_ref()==Some(scope))

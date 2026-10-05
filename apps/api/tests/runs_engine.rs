@@ -635,3 +635,43 @@ fn verified_rr_reference_is_not_hidden_by_unknown_sensor_hr_only_member() {
         assert!(guarded["lt1"]["reasons"].as_array().unwrap().contains(&json!("noHrVariance")));
     }
 }
+
+#[test]
+fn unknown_hr_only_row_does_not_hide_a_newer_proven_sensor_boundary() {
+    let mut older=progressive();
+    older["sourceRevision"]=json!("00000000-0000-4000-8000-000000000001");
+    older["projectionVersion"]=json!(thresholds::PROJECTION_VERSION);
+    let mut changed=older.clone();
+    changed["sourceRevision"]=json!("00000000-0000-4000-8000-000000000002");
+    changed["startTime"]=json!("2026-01-02T00:00:00Z");
+    changed["endTime"]=json!("2026-01-02T00:08:00Z");
+    changed["sensors"][0]["type"]=json!("proven-different-rr-sensor");
+    let mut hr_only=changed.clone();
+    hr_only["sourceRevision"]=json!("00000000-0000-4000-8000-000000000003");
+    hr_only["startTime"]=json!("2026-01-03T00:00:00Z");
+    hr_only["endTime"]=json!("2026-01-03T00:08:00Z");
+    hr_only["sensors"]=json!([]);
+    hr_only["rr"]["intervals"]=json!([]);
+    hr_only["rr"]["alignmentEligible"]=json!(false);
+    for condensed in [false,true] {
+        let row=|id:&str,normalized:&Value| {
+            let evaluated=analysis::analyze(normalized);
+            let receipt=json!({"kind":"immutableNumericalProjection","revisionId":normalized["sourceRevision"],
+                "inputHash":evaluated["thresholds"]["lt1"]["trace"]["inputHash"],"projectionVersion":thresholds::PROJECTION_VERSION});
+            let mut context=normalized.clone();
+            if condensed {context.as_object_mut().unwrap().remove("samples");context.as_object_mut().unwrap().remove("rr");}
+            json!({"activityId":id,"startTime":normalized["startTime"],"endTime":normalized["endTime"],
+                "normalized":context,"analysis":evaluated,"evidenceVerification":receipt})
+        };
+        let old=row("older-sensor-a",&older);
+        assert_eq!(old["analysis"]["thresholds"]["lt1"]["status"],"low_confidence");
+        let mut boundary=row("changed-sensor-b",&changed);
+        for slot in ["lt1","lt2"] {boundary["analysis"]["thresholds"][slot]["method"]["version"]=json!("prior-method");}
+        let result=thresholds::estimate_history("2026-01-03T00:08:00Z",&[old,boundary,row("hr-only",&hr_only)]);
+        for slot in ["lt1","lt2"] {
+            assert!(result[slot]["value"].is_null());
+            assert_eq!(result[slot]["reasons"],json!(["noRecentComparableEvidence"]));
+            assert_eq!(result[slot]["trace"]["inputRevision"],changed["sourceRevision"]);
+        }
+    }
+}
