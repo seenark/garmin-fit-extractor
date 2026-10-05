@@ -84,6 +84,7 @@ pub async fn connect(database_url: &str) -> Result<PgPool, sqlx::Error> {
         .await?;
     sqlx::migrate!().run(&pool).await?;
     backfill_activities(&pool).await?;
+    crate::runs::legacy::backfill(&pool).await?;
     Ok(pool)
 }
 pub async fn insert_success(
@@ -137,6 +138,7 @@ pub async fn insert_success(
         .execute(&mut *transaction)
         .await?;
     }
+    crate::runs::legacy::insert_projection(&mut transaction, &summary.id.to_string(), &user_id.to_string(), summary.activity_date.as_deref(), Some(&normalized_json), true, None).await?;
     transaction.commit().await?;
     Ok(summary)
 }
@@ -159,7 +161,10 @@ pub async fn insert_failure(
         created_at: created_at_now(),
     };
     let e = summary.error.as_ref().unwrap();
-    sqlx::query("INSERT INTO extractions (id,user_id,file_name,file_size_bytes,status,activity_type,activity_date,normalized_json,raw_json,error_code,error_message,created_at) VALUES ($1,$2,$3,$4,'failed',NULL,NULL,NULL,NULL,$5,$6,$7)").bind(summary.id.to_string()).bind(value.user_id.to_string()).bind(&summary.file_name).bind(as_database_size(summary.file_size_bytes)?).bind(&e.code).bind(&e.message).bind(&summary.created_at).execute(pool).await?;
+    let mut transaction = pool.begin().await?;
+    sqlx::query("INSERT INTO extractions (id,user_id,file_name,file_size_bytes,status,activity_type,activity_date,normalized_json,raw_json,error_code,error_message,created_at) VALUES ($1,$2,$3,$4,'failed',NULL,NULL,NULL,NULL,$5,$6,$7)").bind(summary.id.to_string()).bind(value.user_id.to_string()).bind(&summary.file_name).bind(as_database_size(summary.file_size_bytes)?).bind(&e.code).bind(&e.message).bind(&summary.created_at).execute(&mut *transaction).await?;
+    crate::runs::legacy::insert_projection(&mut transaction, &summary.id.to_string(), &value.user_id.to_string(), None, None, false, Some(&e.code)).await?;
+    transaction.commit().await?;
     summary.error.as_mut().unwrap().file_name = Some(summary.file_name.clone());
     Ok(summary)
 }
@@ -227,22 +232,22 @@ pub async fn get_stored(
     sqlx::query("SELECT id,file_name,file_size_bytes,status,activity_type,activity_date,normalized_json,raw_json,error_code,error_message,created_at FROM extractions WHERE user_id=$1 AND id=$2").bind(user_id.to_string()).bind(id.to_string()).fetch_optional(pool).await?.map(stored_from_row).transpose()
 }
 pub async fn delete_one(pool: &PgPool, user_id: Uuid, id: Uuid) -> Result<bool, sqlx::Error> {
-    Ok(
-        sqlx::query("DELETE FROM extractions WHERE user_id=$1 AND id=$2")
-            .bind(user_id.to_string())
-            .bind(id.to_string())
-            .execute(pool)
-            .await?
-            .rows_affected()
-            == 1,
-    )
+    let mut transaction = pool.begin().await?;
+    sqlx::query("DELETE FROM activities WHERE owner_id=$1 AND id=$2 AND EXISTS (SELECT 1 FROM extractions WHERE user_id=$1 AND id=$2)")
+        .bind(user_id.to_string()).bind(id.to_string()).execute(&mut *transaction).await?;
+    let deleted = sqlx::query("DELETE FROM extractions WHERE user_id=$1 AND id=$2")
+        .bind(user_id.to_string()).bind(id.to_string()).execute(&mut *transaction).await?.rows_affected() == 1;
+    transaction.commit().await?;
+    Ok(deleted)
 }
 pub async fn delete_all(pool: &PgPool, user_id: Uuid) -> Result<u64, sqlx::Error> {
-    Ok(sqlx::query("DELETE FROM extractions WHERE user_id=$1")
-        .bind(user_id.to_string())
-        .execute(pool)
-        .await?
-        .rows_affected())
+    let mut transaction = pool.begin().await?;
+    sqlx::query("DELETE FROM activities WHERE owner_id=$1 AND id IN (SELECT id FROM extractions WHERE user_id=$1)")
+        .bind(user_id.to_string()).execute(&mut *transaction).await?;
+    let deleted = sqlx::query("DELETE FROM extractions WHERE user_id=$1")
+        .bind(user_id.to_string()).execute(&mut *transaction).await?.rows_affected();
+    transaction.commit().await?;
+    Ok(deleted)
 }
 fn summary_from_row(row: &PgRow) -> Result<ExtractionSummary, sqlx::Error> {
     let id: String = row.try_get("id")?;
@@ -277,7 +282,7 @@ fn stored_from_row(row: PgRow) -> Result<StoredExtraction, sqlx::Error> {
         raw_json: row.try_get("raw_json")?,
     })
 }
-fn created_at_now() -> String {
+pub fn created_at_now() -> String {
     OffsetDateTime::now_utc()
         .format(CREATED_AT_FORMAT)
         .expect("fixed timestamp format is valid")
