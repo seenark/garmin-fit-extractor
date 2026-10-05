@@ -10,6 +10,16 @@ pub(crate) fn number(value: &Value, key: &str) -> Option<f64> {
     value.get(key)?.as_f64().filter(|v| v.is_finite())
 }
 
+fn signal_number(value:&Value,key:&str)->Option<f64> {
+    let (low,high)=match key {
+        "heartRateBpm" => (30.0,240.0),
+        "speedMps" => (0.0,15.0),
+        "powerWatts" => (0.0,3000.0),
+        _ => return None,
+    };
+    number(value,key).filter(|v|*v>=low&&*v<=high)
+}
+
 pub(crate) fn elapsed_duration(normalized: &Value) -> Option<f64> {
     let recorded = number(&normalized["summary"], "elapsedTimeSeconds").filter(|v| *v > 0.0);
     let bounded = normalized["startTime"].as_str().zip(normalized["endTime"].as_str()).and_then(|(start,end)| {
@@ -31,40 +41,72 @@ fn in_bounds<'a>(timeline:&'a [&Value],start:f64,end:f64)->&'a [&'a Value] {
     &timeline[left..right]
 }
 
-pub(crate) fn timer_pauses(normalized:&Value)->Result<Vec<(f64,f64)>,&'static str> {
+pub(crate) struct TimerTimeline {
+    pauses:Vec<(f64,f64)>,
+    support:Vec<(f64,f64)>,
+}
+
+impl TimerTimeline {
+    pub(crate) fn covers(&self,start:f64,end:f64)->bool {
+        let index=self.support.partition_point(|(_,stop)|*stop<=start);
+        self.support.get(index).is_some_and(|(a,b)|*a<=start+1e-9&&*b>=end-1e-9)
+    }
+
+    pub(crate) fn overlaps_pause(&self,start:f64,end:f64)->bool {
+        let index=self.pauses.partition_point(|(_,stop)|*stop<=start);
+        self.pauses.get(index).is_some_and(|(a,_)|*a<end)
+    }
+}
+
+fn merge_intervals(intervals:&mut Vec<(f64,f64)>) {
+    if !intervals.is_sorted_by(|a,b|a.0<=b.0){intervals.sort_unstable_by(|a,b|a.0.total_cmp(&b.0));}
+    let mut count=0;
+    for i in 0..intervals.len() {
+        let current=intervals[i];
+        if count>0&&current.0<=intervals[count-1].1 {intervals[count-1].1=intervals[count-1].1.max(current.1);}
+        else {intervals[count]=current;count+=1;}
+    }
+    intervals.truncate(count);
+}
+
+pub(crate) fn timer_timeline(normalized:&Value)->Result<TimerTimeline,&'static str> {
     let duration=elapsed_duration(normalized).unwrap_or(0.0);
-    let mut pauses=Vec::new();
+    let mut timeline=TimerTimeline{pauses:Vec::new(),support:Vec::new()};
     let mut stopped=None;
     let mut previous=-1.0;
+    let mut first_event=None;
     if let Some(events)=normalized["timerEvents"].as_array() {
         for event in events.iter().filter(|e|e["event"]==0&&matches!(e["eventType"].as_i64(),Some(0|1|4))) {
             let time=number(event,"elapsedSeconds").filter(|t|*t>=0.0&&*t<=duration).ok_or("timerTimeUncertain")?;
             if time<previous{return Err("timerTimeUncertain");}
             previous=time;
+            if first_event.is_none(){first_event=Some(time);}
             match event["eventType"].as_i64() {
                 Some(1|4) => {if stopped.is_none(){stopped=Some(time);}},
-                Some(0) => {if let Some(start)=stopped.take(){if time>start{pauses.push((start,time));}}},
+                Some(0) => {if let Some(start)=stopped.take(){if time>start{timeline.pauses.push((start,time));}}},
                 _ => {},
             }
         }
     }
-    if let Some(start)=stopped.filter(|start|*start<duration){pauses.push((start,duration));}
+    if let Some(start)=stopped.filter(|start|*start<duration){timeline.pauses.push((start,duration));}
     if let Some(samples)=normalized["samples"].as_array() {
-        for pair in samples.windows(2).filter(|p|p[0]["timerRunning"]==false) {
+        for pair in samples.windows(2).filter(|p|p[0]["timerRunning"].is_boolean()) {
             if let (Some(start),Some(end))=(number(&pair[0],"elapsedSeconds"),number(&pair[1],"elapsedSeconds")) {
-                if start>=0.0&&end<=duration&&end>start&&end-start<=MAX_SAMPLE_GAP {pauses.push((start,end));}
+                if start>=0.0&&end<=duration&&end>start&&end-start<=MAX_SAMPLE_GAP {
+                    timeline.support.push((start,end));
+                    if pair[0]["timerRunning"]==false {timeline.pauses.push((start,end));}
+                }
             }
         }
     }
-    if !pauses.is_sorted_by(|a,b|a.0<=b.0){pauses.sort_by(|a,b|a.0.total_cmp(&b.0));}
-    let mut count=0;
-    for i in 0..pauses.len() {
-        let current=pauses[i];
-        if count>0&&current.0<=pauses[count-1].1 {pauses[count-1].1=pauses[count-1].1.max(current.1);}
-        else {pauses[count]=current;count+=1;}
+    merge_intervals(&mut timeline.support);
+    if let Some(start)=first_event.filter(|start|*start<duration) {
+        let index=timeline.support.partition_point(|(a,_)|*a<start);
+        timeline.support.insert(index,(start,duration));
+        merge_intervals(&mut timeline.support);
     }
-    pauses.truncate(count);
-    Ok(pauses)
+    merge_intervals(&mut timeline.pauses);
+    Ok(timeline)
 }
 
 fn metrics(samples: &[&Value], start: f64, end: f64) -> Value {
@@ -73,9 +115,9 @@ fn metrics(samples: &[&Value], start: f64, end: f64) -> Value {
     let mut power = Vec::new();
     for sample in samples {
         let Some(t) = number(sample, "elapsedSeconds") else { continue; };
-        if let Some(v) = number(sample, "speedMps").filter(|v| *v >= 0.0 && *v <= 15.0) { speed.push((t, v)); }
-        if let Some(v) = number(sample, "heartRateBpm").filter(|v| *v >= 30.0 && *v <= 240.0) { hr.push((t, v)); }
-        if let Some(v) = number(sample, "powerWatts").filter(|v| *v >= 0.0 && *v <= 3000.0) { power.push(v); }
+        if let Some(v) = signal_number(sample, "speedMps") { speed.push((t, v)); }
+        if let Some(v) = signal_number(sample, "heartRateBpm") { hr.push((t, v)); }
+        if let Some(v) = signal_number(sample, "powerWatts") { power.push(v); }
     }
     let average = |values: &[f64]| (!values.is_empty()).then(|| values.iter().sum::<f64>() / values.len() as f64);
     let speeds: Vec<f64> = speed.iter().map(|v| v.1).collect();
@@ -90,7 +132,7 @@ fn metrics(samples: &[&Value], start: f64, end: f64) -> Value {
     // Coverage is supported elapsed duration, not number of rows or a confidence score.
     let supported = |key: &str| samples.windows(2).filter_map(|pair| {
         let dt = number(pair[1], "elapsedSeconds")? - number(pair[0], "elapsedSeconds")?;
-        (dt > 0.0 && dt <= MAX_SAMPLE_GAP && number(pair[0], key).is_some() && number(pair[1], key).is_some()).then_some(dt)
+        (dt > 0.0 && dt <= MAX_SAMPLE_GAP && signal_number(pair[0], key).is_some() && signal_number(pair[1], key).is_some()).then_some(dt)
     }).sum::<f64>();
     let duration = end - start;
     json!({"speedMeanMps":mean,"speedCv":cv,"speedSlopeMpsPerSecond":slope,
@@ -126,7 +168,7 @@ pub fn analyze(normalized: &Value) -> Value {
             else if dt > MAX_SAMPLE_GAP { gaps.push(json!({"startElapsedSeconds":previous_t,"endElapsedSeconds":t,"reason":"sampleGap"})); }
             else {
                 for (i,key) in ["heartRateBpm","speedMps","powerWatts"].iter().enumerate() {
-                    if number(previous,key).is_some() && number(sample,key).is_some() { coverage[i] += dt; }
+                    if signal_number(previous,key).is_some() && signal_number(sample,key).is_some() { coverage[i] += dt; }
                 }
             }
         }
@@ -139,14 +181,11 @@ pub fn analyze(normalized: &Value) -> Value {
     if out_of_order > 0 { reasons.push("outOfOrderSamples"); }
     if invalid_times > 0 { reasons.push("invalidSampleTime"); }
     if duration <= 0.0 { reasons.push("activityBoundsUnavailable"); }
-    let pause_intervals=timer_pauses(normalized);
-    if pause_intervals.is_err(){reasons.push("timerTimeUncertain");}
+    let timer=timer_timeline(normalized);
+    let pause_intervals=timer.as_ref().map(|timeline|timeline.pauses.as_slice());
+    if timer.is_err(){reasons.push("timerTimeUncertain");}
     let paused_seconds=pause_intervals.as_ref().map(|pauses|pauses.iter().map(|(start,end)|end-start).sum::<f64>()).unwrap_or(0.0);
-    let event_complete=normalized["timerEvents"].as_array().and_then(|events|events.iter().find(|e|e["event"]==0&&matches!(e["eventType"].as_i64(),Some(0|1|4))))
-        .is_some_and(|event|number(event,"elapsedSeconds").is_some_and(|t|t.abs()<=1e-9))&&pause_intervals.is_ok();
-    let sample_complete=!samples.is_empty()&&samples.iter().all(|s|s["timerRunning"].is_boolean())&&gaps.is_empty()&&invalid_times==0
-        &&number(&samples[0],"elapsedSeconds")==Some(0.0)&&number(samples.last().unwrap(),"elapsedSeconds")==Some(duration);
-    let timer_complete=event_complete||sample_complete;
+    let timer_complete=timer.as_ref().is_ok_and(|timeline|timeline.covers(0.0,duration));
     let recorded_timer=number(&normalized["summary"],"timerTimeSeconds");
     let derived_timer=timer_complete.then_some(duration-paused_seconds);
     let timer_difference=recorded_timer.zip(derived_timer).map(|(recorded,derived)|recorded-derived);
@@ -167,8 +206,7 @@ pub fn analyze(normalized: &Value) -> Value {
         let features = metrics(selected, cursor, end);
         let mean = number(&features,"speedMeanMps");
         let gap = gaps.iter().any(|g| number(g,"startElapsedSeconds").unwrap_or(0.0) < end && number(g,"endElapsedSeconds").unwrap_or(0.0) > cursor);
-        let pause = selected.iter().any(|s| s["timerRunning"] == false && number(s,"elapsedSeconds").is_some_and(|t|t<end))
-            ||pause_intervals.as_ref().is_ok_and(|pauses|pauses.iter().any(|(start,stop)|*start<end&&*stop>cursor));
+        let pause=timer.as_ref().is_ok_and(|timeline|timeline.overlaps_pause(cursor,end));
         let coverage_speed = number(&features["coverage"],"speed").unwrap_or(0.0);
         let increase = previous_mean.zip(mean).is_some_and(|(previous,current)|previous>0.0 && current>previous*1.15);
         let decrease = previous_mean.zip(mean).is_some_and(|(previous,current)|previous>0.0 && current<previous*0.85);
@@ -224,7 +262,7 @@ pub fn analyze(normalized: &Value) -> Value {
         "gaps":gaps,"duplicateTimestamps":duplicate_timestamps,"outOfOrder":out_of_order,"invalidTimes":invalid_times,
         "artifacts":artifacts,"pausedSeconds":paused_seconds,"pauseTimeBasis":"observedTimerStateUnion",
         "recordedTimerTimeSeconds":recorded_timer,"derivedTimerTimeSeconds":derived_timer,"timerTotalsDifferenceSeconds":timer_difference,
-        "timerCoverage":if timer_complete {"complete"} else if paused_seconds>0.0 {"partial"} else {"unavailable"},
+        "timerCoverage":if timer_complete {"complete"} else if timer.as_ref().is_ok_and(|timeline|!timeline.support.is_empty()) {"partial"} else {"unavailable"},
         "timerPauseIntervals":pause_intervals.unwrap_or_default().iter().map(|(start,end)|json!({"startElapsedSeconds":start,"endElapsedSeconds":end})).collect::<Vec<_>>(),"reasons":reasons},"segments":segments,"thresholds":targets,
         "transformations":[{"type":"derivedWorkloadBlocks","blockSeconds":WORKLOAD_BLOCK_SECONDS,"originalSamplesChanged":false,"derivedTimelineSorted":out_of_order>0,"hrStabilityFilter":false}]})
 }

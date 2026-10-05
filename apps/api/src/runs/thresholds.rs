@@ -233,26 +233,33 @@ fn recorded_beats(normalized: &Value) -> Result<Vec<Beat>, &'static str> {
     }
     let mut marked = vec![false;beats.len()];
     for i in 0..beats.len() {
-        let mut neighbors: Vec<f64> = beats[i.saturating_sub(5)..(i+6).min(beats.len())].iter().map(|b|b.raw).filter(|v|*v>=250.0&&*v<=2000.0).collect();
-        neighbors.sort_by(f64::total_cmp);
-        let median = neighbors.get(neighbors.len()/2).copied();
+        let mut neighbors=[0.0_f64;11];
+        let mut count=0;
+        for beat in &beats[i.saturating_sub(5)..(i+6).min(beats.len())] {
+            if (250.0..=2000.0).contains(&beat.raw) {neighbors[count]=beat.raw;count+=1;}
+        }
+        neighbors[..count].sort_unstable_by(f64::total_cmp);
+        let median=(count>0).then(||neighbors[count/2]);
         let outlier = median.is_some_and(|m|(beats[i].raw-m).abs()/m>0.20);
         if beats[i].raw<250.0||beats[i].raw>2000.0||outlier {
             marked[i]=true;
             beats[i].reasons.push(if outlier {"localMedianDeviation"} else {"outsideRrRange"});
         }
     }
-    for i in 0..beats.len() {
-        if !marked[i] {continue;}
-        let previous=(0..i).rev().find(|j|!marked[*j]);
-        let next=(i+1..beats.len()).find(|j|!marked[*j]);
-        beats[i].corrected=previous.zip(next).and_then(|(p,n)|{
-            // Do not correct across a source-timing gap or fabricate boundary beats.
-            if beats[p..=n].windows(2).any(|b|(b[1].start-b[0].end).abs()>0.005) {return None;}
-            let fraction=(beats[i].end-beats[p].end)/(beats[n].end-beats[p].end);
-            Some(beats[p].raw+(beats[n].raw-beats[p].raw)*fraction)
+    let mut cursor=0;
+    while cursor<beats.len() {
+        if !marked[cursor] {cursor+=1;continue;}
+        let start=cursor;
+        while cursor<beats.len()&&marked[cursor] {cursor+=1;}
+        let endpoints=start.checked_sub(1).zip((cursor<beats.len()).then_some(cursor)).and_then(|(previous,next)| {
+            // Inspect continuity once per artifact run; never bridge a source gap.
+            if beats[previous..=next].windows(2).any(|b|(b[1].start-b[0].end).abs()>0.005) {return None;}
+            Some((beats[previous].end,beats[next].end,beats[previous].raw,beats[next].raw))
         });
-        if beats[i].corrected.is_some() {beats[i].reasons.push("linearTimeInterpolation");}
+        for beat in &mut beats[start..cursor] {
+            beat.corrected=endpoints.map(|(a,b,ra,rb)|ra+(rb-ra)*(beat.end-a)/(b-a));
+            if beat.corrected.is_some() {beat.reasons.push("linearTimeInterpolation");}
+        }
     }
     Ok(beats)
 }
@@ -309,9 +316,9 @@ fn compute_windows(normalized: &Value, segments: &[Value], beats: &[Beat]) -> Ve
     let duration=elapsed_duration(normalized).unwrap_or(0.0);
     let mut windows=Vec::new();
     let hr_timeline=HrTimeline::new(normalized);
-    let pauses=super::analysis::timer_pauses(normalized);
-    for chain in beats.chunk_by(|a,b|(b.start-a.end).abs()<=0.005&&(250.0..=2000.0).contains(&a.raw)&&(250.0..=2000.0).contains(&b.raw)) {
-        if chain.len()<32||!(250.0..=2000.0).contains(&chain[0].raw){continue;}
+    let timer=super::analysis::timer_timeline(normalized);
+    for chain in beats.chunk_by(|a,b|(b.start-a.end).abs()<=0.005) {
+        if chain.len()<32 {continue;}
         let mut center=((chain[0].start+60.0)/5.0).ceil()*5.0;
         let last_center=((chain.last().unwrap().end-60.0)/5.0).ceil()*5.0;
         while center<=last_center&&center+60.0<=duration {
@@ -320,8 +327,8 @@ fn compute_windows(normalized: &Value, segments: &[Value], beats: &[Beat]) -> Ve
         let last=beats.partition_point(|b|b.end<=end);
         let selected=&beats[first..last];
         let mut reasons:Vec<&str>=Vec::new();
-        if pauses.is_err(){reasons.push("requiredContextUnprovable");}
-        else if pauses.as_ref().is_ok_and(|pauses|pauses.iter().any(|(a,b)|*a<end&&*b>start)){reasons.push("timerPause");}
+        if !timer.as_ref().is_ok_and(|timeline|timeline.covers(start,end)){reasons.push("requiredContextUnprovable");}
+        if timer.as_ref().is_ok_and(|timeline|timeline.overlaps_pause(start,end)){reasons.push("timerPause");}
         let segment=segments.iter().find(|s|number(s,"startElapsedSeconds").is_some_and(|t|t<=start)&&number(s,"endElapsedSeconds").is_some_and(|t|t>=end));
         if !segment.is_some_and(|s|s["eligibility"]["lt1"]["accepted"]==true) {
             let carryover=segments.iter().any(|s|number(s,"startElapsedSeconds").is_some_and(|t|t<end)&&number(s,"endElapsedSeconds").is_some_and(|t|t>start)&&s["eligibility"]["lt1"]["reasons"].as_array().is_some_and(|r|r.iter().any(|r|r=="fatigueCarryover")));
@@ -398,13 +405,15 @@ fn select_candidates(windows:&[Value],target:f64,beats:Option<&[Beat]>)->Vec<Val
         let last_beat=selected.last().and_then(|w|w["lastBeatIndexExclusive"].as_u64()).unwrap_or(0) as usize;
         let unique=beats.and_then(|b|b.get(first_beat..last_beat));
         let corrected=unique.map(|b|b.iter().filter(|b|!b.reasons.is_empty()).count());
+        let invalid=unique.map(|b|b.iter().filter(|b|!(250.0..=2000.0).contains(&b.raw)).count());
+        let missing=unique.and_then(|b|b.windows(2).all(|p|(p[1].start-p[0].end).abs()<=0.005).then_some(0));
         let fraction=unique.zip(corrected).map(|(b,count)|if b.is_empty(){0.0}else{count as f64/b.len() as f64});
         if fraction.is_some_and(|fraction|fraction>0.03+1e-12) {reasons.push("excessArtifact");}
         candidates.push(json!({"segmentIndex":windows[start]["segmentIndex"],"firstWindowIndex":first,"lastWindowIndex":last,
             "windowCount":selected.len(),"innerWindowCount":inner_count,"boundaryWindowIndices":boundaries,
             "accepted":reasons.is_empty(),"reasons":reasons,"crossing":crossing,
             "regression":regression.map(|(s,b)|json!({"slope":s,"intercept":b,"hrMin":hr_min,"hrMax":hr_max,"alphaMin":alpha_min,"alphaMax":alpha_max})),
-            "rawBeatCount":unique.map(|b|b.len()),"correctedBeatCount":corrected,"artifactFraction":fraction}));
+            "rawBeatCount":unique.map(|b|b.len()),"correctedBeatCount":corrected,"invalidBeatCount":invalid,"missingBeatCount":missing,"artifactFraction":fraction}));
     }
     candidates
 }
@@ -496,12 +505,9 @@ pub fn estimate_history(cutoff:&str,evidence:&[Value])->Value {
     rows.sort_by(|(a,ta),(b,tb)|tb.cmp(ta).then_with(||a["activityId"].as_str().unwrap_or("").cmp(b["activityId"].as_str().unwrap_or(""))));
     let reference=rows.first().map(|(row,_)|*row);
     let scope=reference.and_then(|row|comparability(&row["normalized"]));
-    let mut groups=BTreeSet::new();
     let mut prepared=Vec::new();
     let configuration_hash=method(0.75)["configurationHash"].clone();
     for (row,end) in rows {
-        let group=row["observationGroupId"].as_str().filter(|s|!s.is_empty()).or_else(||row["activityId"].as_str());
-        if let Some(group)=group {if !groups.insert(group.to_string()){continue;}}
         let analysis=if row["analysis"]["thresholds"].is_object(){std::borrow::Cow::Borrowed(&row["analysis"])}else{std::borrow::Cow::Owned(super::analysis::analyze(&row["normalized"]))};
         let comparable=scope.as_ref().is_some_and(|key|comparability(&row["normalized"]).as_ref()==Some(key))
             || reference.is_some_and(|reference|reference["activityId"]==row["activityId"]);
@@ -509,6 +515,8 @@ pub fn estimate_history(cutoff:&str,evidence:&[Value])->Value {
         let input_hash=historical_input_digest(row);
         prepared.push(HistoricalEvidence{source:row,age_days:age,comparable,analysis,input_hash});
     }
+    // Each target selects one source, so duplicate members never add weight.
+    // Validate first; a stale representative must not hide valid cache.
     let produce=|slot:&str,target:f64| {
         let expected_id=if target==0.75 {"running-dfa-a1-075"} else {"running-dfa-a1-050"};
         let evaluated=|entry:&HistoricalEvidence| {
@@ -563,6 +571,7 @@ fn leaf_fields(value:&Value,keys:&[&str])->Value {
 /// Closed selected-only aggregate projection. No source identities, unselected
 /// windows/samples/laps, history arrays, last-good payloads or device identities.
 pub fn export_projection(result:&Value)->Value {
+    if result.is_null(){return Value::Null;}
     if result.get("lt1").is_some()||result.get("lt2").is_some() {
         let mut projection=json!({"lt1":export_projection(&result["lt1"]),"lt2":export_projection(&result["lt2"])});
         for key in ["evidenceCutoff","computedAt","policyVersion","engineStatus","researchBlocked"] {

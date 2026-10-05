@@ -499,3 +499,101 @@ fn independent_historical_targets_report_conflict_without_clamping() {
         assert_eq!(result[slot]["status"],"low_confidence");
     }
 }
+
+#[test]
+fn an_isolated_out_of_range_rr_keeps_its_correctable_continuous_window() {
+    let mut normalized=progressive();
+    normalized["rr"]["intervals"][400]["rrMs"]=json!(200.0);
+    let mut cursor=0.0;
+    for beat in normalized["rr"]["intervals"].as_array_mut().unwrap() {
+        beat["startElapsedSeconds"]=json!(cursor);
+        cursor+=beat["rrMs"].as_f64().unwrap()/1000.0;
+        beat["endElapsedSeconds"]=json!(cursor);
+        beat["elapsedSeconds"]=json!(cursor);
+    }
+    let result=analysis::analyze(&normalized);
+    let window=result["thresholds"]["lt1"]["trace"]["windows"].as_array().unwrap().iter().find(|w|w["centerElapsedSeconds"]==240.0).expect("continuous corrected RR window at 240 seconds");
+    assert_eq!(window["accepted"],true,"{}",window["reasons"]);
+    assert_eq!(window["invalidBeatCount"],1);
+    assert_eq!(window["correctedBeatCount"],1);
+    let artifact=window["artifactAnnotations"].as_array().unwrap().iter().find(|a|a["beatIndex"]==400).unwrap();
+    assert_eq!(artifact["rawRrMs"],200.0);
+    assert!(artifact["correctedRrMs"].as_f64().unwrap()>250.0);
+    assert!(artifact["reasons"].as_array().unwrap().contains(&json!("linearTimeInterpolation")));
+    assert_eq!(normalized["rr"]["intervals"][400]["rrMs"],200.0);
+}
+
+#[test]
+fn out_of_range_speed_endpoints_do_not_create_observed_progression_support() {
+    let mut normalized=progressive();
+    for (index,sample) in normalized["samples"].as_array_mut().unwrap().iter_mut().enumerate() {
+        if index%30!=0 {sample["speedMps"]=json!(16.0);}
+    }
+    let result=analysis::analyze(&normalized);
+    for slot in ["lt1","lt2"] {
+        assert!(result["thresholds"][slot]["value"].is_null());
+        assert!(result["thresholds"][slot]["reasons"].as_array().unwrap().contains(&json!("unsupportedProtocol")));
+    }
+    assert_eq!(result["quality"]["coverage"]["speed"],0.0);
+    for segment in result["segments"].as_array().unwrap() {
+        assert_eq!(segment["features"]["coverage"]["speed"],0.0);
+        assert_eq!(segment["eligibility"]["lt1"]["accepted"],false);
+    }
+    assert_eq!(normalized["samples"][1]["speedMps"],16.0);
+}
+
+#[test]
+fn unavailable_timer_state_abstains_and_partial_support_is_window_local() {
+    let mut normalized=progressive();
+    for sample in normalized["samples"].as_array_mut().unwrap() {sample.as_object_mut().unwrap().remove("timerRunning");}
+    let result=analysis::analyze(&normalized);
+    assert_eq!(result["quality"]["timerCoverage"],"unavailable");
+    assert!(result["thresholds"]["lt1"]["value"].is_null());
+    assert!(result["thresholds"]["lt1"]["reasons"].as_array().unwrap().contains(&json!("requiredContextUnprovable")));
+    for sample in &mut normalized["samples"].as_array_mut().unwrap()[..180] {sample["timerRunning"]=json!(true);}
+    let partial=analysis::analyze(&normalized);
+    assert_eq!(partial["quality"]["timerCoverage"],"partial");
+    let windows=partial["thresholds"]["lt1"]["trace"]["windows"].as_array().unwrap();
+    assert_eq!(windows.iter().find(|w|w["centerElapsedSeconds"]==120.0).unwrap()["accepted"],true);
+    assert!(windows.iter().find(|w|w["centerElapsedSeconds"]==125.0).unwrap()["reasons"].as_array().unwrap().contains(&json!("requiredContextUnprovable")));
+}
+
+#[test]
+fn stale_duplicate_cache_does_not_hide_current_eligible_representative() {
+    let normalized=counter_quantized(progressive());
+    let evaluated=analysis::analyze(&normalized);
+    let mut stale=evaluated.clone();
+    stale["thresholds"]["lt1"]["trace"]["inputHash"]=json!("stale");
+    stale["thresholds"]["lt2"]["trace"]["inputHash"]=json!("stale");
+    let result=thresholds::estimate_history("2026-01-01T00:08:00Z",&[
+        json!({"activityId":"a","observationGroupId":"same-run","startTime":normalized["startTime"],"endTime":normalized["endTime"],"normalized":normalized,"analysis":stale}),
+        json!({"activityId":"b","observationGroupId":"same-run","startTime":normalized["startTime"],"endTime":normalized["endTime"],"normalized":normalized,"analysis":evaluated}),
+    ]);
+    assert!((result["lt1"]["value"]["heartRateBpm"].as_f64().unwrap()-134.71544856745652).abs()<1e-8);
+    assert_eq!(result["lt1"]["evidence"]["activityId"],"b");
+    assert_eq!(result["lt1"]["evidence"]["independentActivityCount"],1);
+    assert_eq!(result["lt2"]["reasons"],json!(["noExtrapolation"]));
+    assert_eq!(result["lt2"]["evidence"]["activityId"],"b");
+}
+
+#[test]
+fn regression_candidate_counts_unique_invalid_and_missing_beats() {
+    let result=analysis::analyze(&counter_quantized(progressive()));
+    let candidate=&result["thresholds"]["lt2"]["trace"]["candidates"][0];
+    assert_eq!(candidate["accepted"],false);
+    assert_eq!(candidate["reasons"],json!(["noExtrapolation"]));
+    assert_eq!(candidate["invalidBeatCount"],0);
+    assert_eq!(candidate["missingBeatCount"],0);
+    assert_eq!(candidate["correctedBeatCount"],0);
+}
+
+#[test]
+fn export_preserves_unattempted_target_and_real_failed_target_nulls() {
+    let actual=analysis::analyze(&counter_quantized(progressive()));
+    let result=thresholds::export_projection(&json!({"lt1":null,"lt2":actual["thresholds"]["lt2"]}));
+    assert!(result["lt1"].is_null());
+    assert!(result["lt2"]["value"].is_null());
+    assert_eq!(result["lt2"]["status"],"insufficient_data");
+    assert_eq!(result["lt2"]["reasons"],json!(["noExtrapolation"]));
+    assert_eq!(result["lt2"]["trace"]["counts"]["rejected"],1);
+}
