@@ -4,7 +4,7 @@ import { ClipboardExportError, createRunExportSession, ExportChangedError, Expor
 import type { RunExportPreview, RunExportSession } from "../lib/run-export";
 import type { RunExportMode, RunExportSnapshot } from "../lib/runs-types";
 
-interface ExportProps { activityIds: string[]; }
+interface ExportProps { activityIds: string[]; historyReady?: boolean; }
 interface ModeProps extends ExportProps { mode: RunExportMode; includeLocation: boolean; includeDeviceIdentifiers: boolean; }
 type Action = "prepare" | "preview" | "copy" | "download";
 
@@ -15,7 +15,7 @@ function exportError(error: unknown): string {
   return "ส่งออกไม่สำเร็จ ลองอีกครั้ง รายการที่เลือกยังอยู่ครบ";
 }
 
-function ModeExport({ activityIds, mode, includeLocation, includeDeviceIdentifiers }: ModeProps) {
+function ModeExport({ activityIds, mode, includeLocation, includeDeviceIdentifiers, historyReady = true }: ModeProps) {
   const session = useRef<RunExportSession | null>(null);
   const selectionKey = JSON.stringify(activityIds);
   const [snapshot, setSnapshot] = useState<RunExportSnapshot>();
@@ -76,7 +76,7 @@ function ModeExport({ activityIds, mode, includeLocation, includeDeviceIdentifie
   return <section className="run-export-mode" aria-label={`ส่งออก ${mode === "coach" ? "Coach JSON" : "Full JSON"}`}>
     <h3>{mode === "coach" ? "Coach JSON" : "Full JSON"}</h3>
     <p>{mode === "coach" ? "ข้อมูลสำหรับโค้ช พร้อมการรวม samples ที่เปิดเผยไว้ในข้อมูลส่งออก" : "ข้อมูล decoded, normalized และผลวิเคราะห์ ตามส่วนที่ decoder รองรับ"}</p>
-    {!snapshot ? <button type="button" className="secondary" disabled={!!busy || activityIds.length === 0} aria-busy={busy === "prepare"} onClick={() => perform("prepare")}>
+    {!snapshot ? <button type="button" className="secondary" disabled={!!busy || activityIds.length === 0 || !historyReady} aria-busy={busy === "prepare"} onClick={() => perform("prepare")}>
       {busy === "prepare" ? "กำลังสร้าง snapshot…" : `เตรียม ${mode === "coach" ? "Coach" : "Full"} JSON`}
     </button> : <>
       <dl className="run-export-metadata">
@@ -113,7 +113,7 @@ function ModeExport({ activityIds, mode, includeLocation, includeDeviceIdentifie
   </section>;
 }
 
-export function RunExportActions({ activityIds }: ExportProps) {
+export function RunExportActions({ activityIds, historyReady = true }: ExportProps) {
   const [includeLocation, setIncludeLocation] = useState(false);
   const [includeDeviceIdentifiers, setIncludeDeviceIdentifiers] = useState(false);
   const [generation, setGeneration] = useState(0);
@@ -121,6 +121,7 @@ export function RunExportActions({ activityIds }: ExportProps) {
   return <section className="run-export-actions" aria-label="ส่งออกกิจกรรมที่เลือก">
     <div className="section-heading"><h2>ส่งออก JSON</h2><span className="muted">เลือกไว้ {activityIds.length.toLocaleString("th-TH")} กิจกรรม</span></div>
     {activityIds.length === 0 && <p>เลือกกิจกรรมอย่างน้อย 1 รายการเพื่อส่งออก ไม่มีการเลือกทั้งหมดให้อัตโนมัติ</p>}
+    {!historyReady && <p role="status">ผลวิเคราะห์ประวัติของรายการที่เลือกยังไม่พร้อมสำหรับ snapshot ใหม่ ต้องรอให้การประมวลผลประวัติพร้อมก่อน ไม่ใช่สถานะข้อมูลไม่พอประเมิน LT รายการที่เลือกยังอยู่ครบ และ snapshot ที่เตรียมไว้ยังคง revisions และ generatedAt เดิม</p>}
     <fieldset className="run-export-privacy">
       <legend>ข้อมูลส่วนตัวใน JSON</legend>
       <label><input type="checkbox" checked={includeLocation} onChange={(event) => setIncludeLocation(event.target.checked)} /> รวมข้อมูลตำแหน่ง</label>
@@ -128,8 +129,8 @@ export function RunExportActions({ activityIds }: ExportProps) {
       <p>ทั้งสองตัวเลือกปิดไว้เริ่มต้น เปลี่ยนรายการที่เลือกหรือตัวเลือกนี้แล้วต้องเตรียม snapshot ใหม่ รายการที่ละไว้ไม่แสดงค่าที่ถูกซ่อน</p>
     </fieldset>
     <div key={key} className="run-export-modes">
-      {(["coach", "full"] as const).map((mode) => <ModeExport key={mode} mode={mode} activityIds={activityIds} includeLocation={includeLocation} includeDeviceIdentifiers={includeDeviceIdentifiers} />)}
+      {(["coach", "full"] as const).map((mode) => <ModeExport key={mode} mode={mode} activityIds={activityIds} historyReady={historyReady} includeLocation={includeLocation} includeDeviceIdentifiers={includeDeviceIdentifiers} />)}
     </div>
-    <button type="button" className="quiet" disabled={activityIds.length === 0} onClick={() => setGeneration((value) => value + 1)}>สร้าง snapshot ใหม่</button>
+    <button type="button" className="quiet" disabled={activityIds.length === 0 || !historyReady} onClick={() => setGeneration((value) => value + 1)}>สร้าง snapshot ใหม่</button>
   </section>;
 }

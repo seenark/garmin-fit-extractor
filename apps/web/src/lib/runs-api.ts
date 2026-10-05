@@ -22,7 +22,6 @@ export function listRuns({ limit = 50, offset = 0, order = "desc" }: { limit?: n
 export function getRun(id: string): Promise<RunDetail> { return request(`${BASE}/${encodeURIComponent(id)}`); }
 export function getLatestThresholds(): Promise<RunLatestThresholds> { return request(`${BASE}/thresholds/latest`); }
 export function getThresholdTrend(): Promise<RunTrend> { return request(`${BASE}/thresholds/trend`); }
-export function getRunEvidence(id: string): Promise<unknown> { return request(`${BASE}/${encodeURIComponent(id)}/evidence`); }
 export async function deleteRun(id: string): Promise<void> { await responseOrError(await fetch(`${BASE}/${encodeURIComponent(id)}`, { method: "DELETE", credentials: "same-origin" })); }
 export function reprocessRun(id: string): Promise<{ activityId: string; status: "queued" }> { return request(`${BASE}/${encodeURIComponent(id)}/reprocess`, { method: "POST" }); }
 export function importRuns(files: File[]): Promise<RunImportResult> {
