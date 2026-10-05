@@ -103,3 +103,12 @@ Scoped `runs_engine` suite ผ่าน **31 tests** และ `cargo check --te
 Red/green proof ของข้อพบข้างต้น: ก่อนแก้ suite มี 25 passed/6 failed; หลังแก้ 31 passed Actual latest native writer output ทั้งสองยังได้ค่า/F(n)/alpha/history/condensed receipt ตรงหลักฐานข้างบน Wrong receipt revision ทำให้ abstain จริง
 
 Scoped throwaway smoke ประมวลผล **100,000 consecutive out-of-range 1-ms RR intervals** โดย source ทุกแถวยังอยู่ครบและไม่แต่ง threshold Source duration 100 s จึงไม่มี complete 120-s window Actual debug analysis ใช้ **2.638445083 s**, process maximum RSS **369,459,200 bytes** ตัวเลขนี้เป็น pathological software smoke หนึ่งกรณี ไม่ใช่ whole-service benchmark หรือ physiological evidence และไม่ได้เพิ่ม cap/downsample/truncation
+
+## Target-only native crops สำหรับ temporal integration proof
+
+ใช้ source amplitude-6 เดิมแบบ crop โดยไม่แก้ RR/HR/speed relationship, seed, selector หรือ method เก็บเฉพาะ intervals ที่มี start/end อยู่ใน source crop และเลื่อน relative clock ตาม crop start Native encoder สร้าง FIT ใหม่พร้อม genuine counter/fractional anchors และ UTC dates แยก old/fresh ตามโจทย์ temporal integration ไม่แทนค่า cached target ใน DB
+
+- Early source **0–320 s**: 321 samples, 634 RR; independent encoded expected LT1 **134.63727703919471 bpm**, LT2 `null`; actual native→engine LT1 **134.6372770392192 bpm**, LT2 `null`
+- Late source **220–480 s**: 261 samples, 651 RR; first supported interval เริ่ม **0.416015625 s** ใน new elapsed clock ไม่เติม interval 0–0.416 ให้ดูครบ First centered window จึงเริ่ม center 65 s ไม่ใช่ 60 s Independent encoded expected LT2 **160.42106261369022 bpm**, LT1 `null`; actual native→engine LT2 **160.4210626128638 bpm**, LT1 `null`
+
+รัน actual native writer outputs ทั้งสี่ old-LT1/fresh-LT2/old-LT2/fresh-LT1 ทุก window F(n)/alpha ตรง independent oracle ภายใน tolerances เดิม Public history ที่ source-end cutoff ให้ target-only result เดียวกันและ timer coverage complete วันที่ native source จริงใน smoke คือ 2026-09-25/2026-10-04 เวลาเริ่ม 13:07:16Z เป็นข้อมูล synthetic ไม่ใช่ historical human evidence ข้อนี้พิสูจน์ native numerical/history seams เท่านั้น ไม่อ้างว่า numerical slice รัน HTTP/PG/lastAvailable integration ซึ่ง integration owner ตรวจแยก
