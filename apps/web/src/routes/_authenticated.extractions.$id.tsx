@@ -1,143 +1,58 @@
-import { Link, createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
-
-import { AnalysisSummary } from "../components/analysis-summary";
-import { JsonCopyActions } from "../components/json-copy-actions";
-import { RawJsonView } from "../components/raw-json-view";
-import { ApiError, downloadExtraction, getExtraction } from "../lib/api";
+import { Link, createFileRoute, useLocation, useRouter } from "@tanstack/react-router";
+import { useEffect, useState } from "react";
+import { RunCharts } from "../components/run-charts";
+import { RunShareCard } from "../components/run-share-card";
+import { RunExportActions } from "../components/run-export-actions";
+import { CoachPromptEditor } from "../components/coach-prompt-editor";
+import { RunProcessingStatus } from "../components/run-processing-status";
+import { ThresholdStatus } from "../components/threshold-status";
+import { ApiError } from "../lib/api";
+import { getRun, reprocessRun, validateHistorySearch } from "../lib/runs-api";
 import { formatApiError } from "../lib/copy";
 import { formatDateTime } from "../lib/formatters";
-
+import { formatRunShareMetric } from "../lib/run-share-card";
 export const Route = createFileRoute("/_authenticated/extractions/$id")({
-  validateSearch: (search: Record<string, unknown>) => ({
-    offset:
-      typeof search.offset === "number" &&
-      Number.isInteger(search.offset) &&
-      search.offset >= 0
-        ? search.offset
-        : 0,
-    order: search.order === "asc" ? ("asc" as const) : ("desc" as const),
-  }),
-  loader: ({ params }) => getExtraction(params.id),
+  validateSearch: validateHistorySearch,
+  loader: ({ params }) => getRun(params.id),
   component: ExtractionDetailPage,
 });
-
 function ExtractionDetailPage() {
   const detail = Route.useLoaderData();
-  const search = Route.useSearch();
-  const [tab, setTab] = useState<"summary" | "raw">("summary");
+  const search = validateHistorySearch(useLocation().search);
+  const router = useRouter();
+  const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [downloading, setDownloading] = useState<"normalized" | "raw" | null>(
-    null,
-  );
-
-  async function download(view: "normalized" | "raw") {
-    setError(null);
-    setDownloading(view);
-    try {
-      const blob = await downloadExtraction(detail.id, view);
-      const link = document.createElement("a");
-      const stem =
-        detail.fileName.replace(/\.(?:fit|zip)$/i, "") || "extraction";
-      link.href = URL.createObjectURL(blob);
-      link.download = `${stem}.${view}.json`;
-      link.click();
-      URL.revokeObjectURL(link.href);
-    } catch (cause) {
-      setError(
-        cause instanceof ApiError
-          ? formatApiError(cause)
-          : "ดาวน์โหลด JSON ไม่สำเร็จ ลองใหม่อีกครั้ง",
-      );
-    } finally {
-      setDownloading(null);
-    }
+  const processing = detail.processing.status === "queued" || detail.processing.status === "processing";
+  useEffect(() => {
+    if (!processing && detail.processing.historyStatus !== "pending") return;
+    const timer = window.setInterval(() => { void router.invalidate(); }, 3000);
+    return () => window.clearInterval(timer);
+  }, [processing, detail.processing.historyStatus, router]);
+  async function reprocess() {
+    setBusy(true); setError(null);
+    try { await reprocessRun(detail.id); await router.invalidate(); }
+    catch (cause) { setError(cause instanceof ApiError ? formatApiError(cause) : "ส่งงานประมวลผลใหม่ไม่สำเร็จ"); }
+    finally { setBusy(false); }
   }
-
-  if (detail.status === "failed") {
-    return (
-      <section className="card">
-        <h1>{detail.fileName}</h1>
-        <p className="failed">ไม่สำเร็จ</p>
-        <p>{formatDateTime(detail.createdAt)}</p>
-        <div className="error" role="alert">
-          {detail.error
-            ? formatApiError(detail.error)
-            : "การแยกข้อมูลรายการนี้ไม่สำเร็จ"}
-        </div>
-        <p>
-          <Link className="button quiet" to="/history" search={search}>
-            กลับไปประวัติ
-          </Link>
-        </p>
-      </section>
-    );
-  }
-
-  return (
-    <section className="card">
-      <div className="actions">
-        <div>
-          <h1>{detail.fileName}</h1>
-          <p className="success">สำเร็จ</p>
-        </div>
-        <Link className="button quiet" to="/history" search={search}>
-          กลับไปประวัติ
-        </Link>
-      </div>
-      {error ? (
-        <div className="error" role="alert">
-          {error}
-        </div>
-      ) : null}
-      <JsonCopyActions normalized={detail.normalized!} raw={detail.raw!} />
-      <div className="tabs" role="tablist" aria-label="มุมมองข้อมูล">
-        <button
-          type="button"
-          role="tab"
-          aria-selected={tab === "summary"}
-          aria-controls="summary-panel"
-          onClick={() => setTab("summary")}
-        >
-          วิเคราะห์
-        </button>
-        <button
-          type="button"
-          role="tab"
-          aria-selected={tab === "raw"}
-          aria-controls="raw-panel"
-          onClick={() => setTab("raw")}
-        >
-          ข้อมูลดิบ
-        </button>
-      </div>
-      {tab === "summary" ? (
-        <div id="summary-panel" role="tabpanel">
-          <div className="actions">
-            <button
-              type="button"
-              disabled={downloading !== null}
-              onClick={() => download("normalized")}
-            >
-              ดาวน์โหลด JSON แบบวิเคราะห์
-            </button>
-          </div>
-          <AnalysisSummary analysis={detail.normalized!} />
-        </div>
-      ) : (
-        <div id="raw-panel" role="tabpanel">
-          <div className="actions">
-            <button
-              type="button"
-              disabled={downloading !== null}
-              onClick={() => download("raw")}
-            >
-              ดาวน์โหลด Raw JSON
-            </button>
-          </div>
-          <RawJsonView records={detail.raw!} />
-        </div>
-      )}
+  const metrics = [
+    formatRunShareMetric("distance", detail.summary.distanceMeters),
+    formatRunShareMetric("timer", detail.summary.timerTimeSeconds),
+    formatRunShareMetric("pace", detail.summary.averagePaceSecondsPerKm),
+    formatRunShareMetric("heartRate", detail.summary.averageHeartRateBpm),
+    formatRunShareMetric("power", detail.summary.averagePowerWatts),
+  ];
+  return <div className="page-stack">
+    <header className="page-intro"><div><h1>กิจกรรมวิ่ง</h1><p className="page-lede">{formatDateTime(detail.startTime)}</p><p className="section-note">Revision {detail.revisionId ?? "ไม่มี coherent revision"}</p></div><Link className="button quiet" to="/history" search={search}>กลับไปประวัติ</Link></header>
+    <section className="card"><div className="actions"><RunProcessingStatus processing={detail.processing} sourceUnavailable={detail.sourceUnavailable} /><button type="button" className="secondary" disabled={busy || processing || detail.sourceUnavailable} aria-busy={busy} onClick={() => { void reprocess(); }}>{busy ? "กำลังส่งงาน…" : "ประมวลผลใหม่"}</button></div>
+      {error ? <p className="error" role="alert">{error}</p> : null}
+      {detail.fidelityWarnings?.length ? <p className="section-note">{detail.fidelityWarnings.join(" · ")}</p> : null}
+      <dl className="runs-metrics">{metrics.map(metric => <div key={metric.label}><dt>{metric.label}</dt><dd>{metric.value} <span>{metric.unit}</span></dd></div>)}</dl>
     </section>
-  );
+    {detail.normalized ? <RunCharts key={`${detail.id}:${detail.revisionId}`} normalized={detail.normalized} segments={detail.analysis?.segments ?? []} /> : <section className="card"><h2>ข้อมูลกราฟ</h2><p>{detail.sourceUnavailable ? "ข้อมูลเดิมไม่มี normalized streams ที่ผ่าน Runs v2 จึงไม่สร้างกราฟหรือข้อมูลที่ขาดขึ้นเอง" : processing ? "กราฟพร้อมเมื่อ coherent revision ประมวลผลสำเร็จ" : "ยังไม่มี normalized streams สำหรับกิจกรรมนี้"}</p></section>}
+    <ThresholdStatus result={detail.historicalThresholds} recorded={detail.normalized?.deviceReportedThresholds} processing={detail.processing} />
+    {detail.analysis ? <section className="card"><h2>คุณภาพข้อมูลและข้อจำกัด</h2><details><summary>ตรวจคุณภาพและ transformations</summary><pre className="raw-json">{JSON.stringify({ quality: detail.analysis.quality, transformations: detail.analysis.transformations, warnings: detail.normalized?.warnings }, null, 2)}</pre></details></section> : null}
+    <RunExportActions activityIds={[detail.id]} historyReady={detail.sourceUnavailable || !detail.processing.historyStatus || detail.processing.historyStatus === "ready"} />
+    <CoachPromptEditor />
+    {detail.revisionId && !detail.sourceUnavailable ? <RunShareCard key={detail.id} run={{ revisionId: detail.revisionId, startTime: detail.startTime, summary: detail.summary }} /> : <section className="card"><h2>PNG</h2><p>ต้องมี coherent revision ของ Runs v2 ก่อนสร้างภาพจากข้อมูลที่ตรึงไว้</p></section>}
+  </div>;
 }

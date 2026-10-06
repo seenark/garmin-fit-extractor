@@ -19,8 +19,10 @@ FROM rust:1.94-bookworm AS rust-build
 WORKDIR /app
 
 COPY Cargo.toml Cargo.lock ./
-COPY apps/api/Cargo.toml ./apps/api/Cargo.toml
-COPY tools/legacy-data-migrator/Cargo.toml ./tools/legacy-data-migrator/Cargo.toml
+COPY apps/api/Cargo.toml apps/api/build.rs ./apps/api/
+COPY tools/legacy-data-migrator/Cargo.toml tools/legacy-data-migrator/build.rs ./tools/legacy-data-migrator/
+COPY tools/legacy-data-migrator/src ./tools/legacy-data-migrator/src
+COPY vendor ./vendor
 COPY apps/api/src ./apps/api/src
 COPY apps/api/migrations ./apps/api/migrations
 
@@ -39,6 +41,7 @@ RUN groupadd --gid 10001 garmin-fit \
     && chown -R 10001:10001 /app
 
 COPY --from=rust-build /app/target/release/garmin-fit-extractor-api /usr/local/bin/garmin-fit-extractor-api
+COPY --from=rust-build /app/target/release/runs-reset /usr/local/bin/runs-reset
 COPY --from=web-build /app/apps/web/dist /app/public
 
 USER 10001:10001

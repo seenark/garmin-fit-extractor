@@ -1,0 +1,57 @@
+SPDX-License-Identifier: CC0-1.0
+
+The original generate.py, manifest.json, synthetic inputs, and every generated
+.fit and .zip file in this directory are dedicated to the public domain under CC0 1.0
+Universal: https://creativecommons.org/publicdomain/zero/1.0/
+
+To the extent possible under law, the authors waive all copyright and related
+rights in this original synthetic corpus. It is supplied without warranty.
+
+No recorded activity, personal FIT file, GPS position, private device identity,
+secret, environment file, official Garmin SDK, or production data is included.
+All timestamps, device identifiers, developer identifiers, measurements, and
+application identifiers are invented test values. Manufacturers and sport enum
+values identify format semantics, not actual devices or users.
+
+The generator uses Python's standard library only. Field numbers, scales, enum
+values, protocol framing, and CRC arithmetic were inspected in publicly
+available protocol references and fitparser 0.11.0's MIT-licensed profile.
+No fitparser source code or packaged activity fixture is copied into this corpus.
+Source references and independent arithmetic oracles appear in manifest.json.
+
+progressive_rr_input.json is an immutable copy of the Runs analysis author's
+original synthetic progression. The author explicitly authorizes CC0 dedication.
+Its software generator uses NumPy 2.2.6 PCG64 seed 7429 and an AR process:
+rho = 0.97 - 1.57*t/480; state = rho*state + standard_normal();
+intervalMs = 600 - 270*t/480 + 3*state; t advances by intervalMs/1000.
+The committed JSON provides the complete input without needing NumPy.
+The FIT generator quantizes cumulative beat times to 1/1024 second and encodes
+native packed HR events with a timestamp, fractional, and full counter anchor.
+RR intervals come from event counter differences, never reciprocal heart rate.
+
+progressive_rr_oracle.json is the same author's independently computed,
+CC0-authorized software-only numerical reference. Its comparator uses SciPy
+1.15.3 smoothness-priors lambda 500 and MIT-licensed nolds 0.6.3 OLS DFA.
+No comparator implementation is copied, and neither dependency is needed
+to regenerate FIT. The reference distinguishes raw intervals from packed
+1/1024-second quantized intervals; numerical tolerances are not physiological
+precision claims.
+
+The original garmin_progressive_rr.fit deliberately demonstrates no-extrapolation:
+its fitted 0.50 crossing falls beyond the candidate's observed HR range, so LT2
+is absent even though an algebraic line intersection exists. Manifest numerical
+references distinguish fitted intersections from admissible threshold results.
+
+progressive_rr_positive_input.json and progressive_rr_positive_oracle.json are
+distinct CC0-authorized inputs from the same author, using6ms rather than3ms
+AR-process amplitude with the same seed and linear ramp. They generate the
+separate progressive_rr_positive.fit. Its independent encoded-input numerical
+reference has one admissible candidate for each threshold without changing the
+no-extrapolation rule or weakening numerical tolerances.
+
+Reproduce from repository root:
+python3 apps/api/tests/fixtures/runs/generate.py
+
+The manifest records generator version, fixed corpus seed, features, licenses,
+provenance, field dictionary, byte counts, and SHA-256 hashes. Regeneration
+uses no clock, randomness, network, installed FIT parser, or external file.

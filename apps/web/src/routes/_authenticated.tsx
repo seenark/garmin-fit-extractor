@@ -1,4 +1,5 @@
 import { Outlet, createFileRoute, useLocation } from "@tanstack/react-router";
+import { RunSelectionProvider } from "../components/run-selection";
 
 import { Route as RootRoute, SignInScreen } from "./__root";
 
@@ -28,5 +29,5 @@ function AuthenticatedLayout() {
     );
   }
 
-  return <Outlet />;
+  return user ? <RunSelectionProvider key={user.id}><Outlet /></RunSelectionProvider> : <Outlet />;
 }

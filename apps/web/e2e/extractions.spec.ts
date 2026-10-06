@@ -3,10 +3,10 @@ import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 
 const activityArchive = fileURLToPath(
-  new URL("../../api/tests/fixtures/activity.zip", import.meta.url),
+  new URL("../../api/tests/fixtures/runs/garmin_mixed.zip", import.meta.url),
 );
 
-test("authenticates, uploads ZIP members, copies raw JSON, and isolates history", async ({
+test("authenticates, imports ZIP members, exports pinned Runs v2 snapshots, and isolates history", async ({
   page,
   context,
 }, testInfo) => {
@@ -61,23 +61,7 @@ test("authenticates, uploads ZIP members, copies raw JSON, and isolates history"
   await expect(
     page.getByRole("button", { name: "เข้าสู่ระบบด้วย Google" }),
   ).toBeVisible();
-  await expect(
-    page.getByRole("heading", { name: "ดูประวัติการวิ่งของคุณ" }),
-  ).toBeVisible();
-  await expect(
-    page.getByRole("heading", { name: "เข้าสู่ระบบเพื่อไปต่อ" }),
-  ).toBeVisible();
   await page.goto("/upload");
-  await expect(
-    page.getByRole("heading", {
-      name: "ยังไม่มีไฟล์ ZIP? ดาวน์โหลดจาก Garmin Connect ตามนี้ได้เลย",
-    }),
-  ).toBeVisible();
-  await expect(
-    page.getByRole("heading", {
-      name: "อ่าน guide ได้ก่อน โดยยังไม่ต้องเข้าสู่ระบบ",
-    }),
-  ).toBeVisible();
   await expect(page.getByTestId("upload-dropzone")).toHaveCount(0);
   await expect(
     page.getByRole("button", { name: "เข้าสู่ระบบเพื่ออัปโหลด" }),
@@ -85,11 +69,6 @@ test("authenticates, uploads ZIP members, copies raw JSON, and isolates history"
 
   await page.goto("/api/v1/auth/test-login?user=alice");
   await expect(page.getByText("alice", { exact: true })).toBeVisible();
-  await expect(
-    page.getByRole("heading", {
-      name: "เรื่องวิ่งของคุณ มีอะไรให้ดูมากกว่าที่คิด",
-    }),
-  ).toBeVisible();
   await page
     .getByRole("navigation", { name: "เมนูหลัก" })
     .getByRole("link", { name: "เพิ่มข้อมูลวิ่ง", exact: true })
@@ -114,145 +93,95 @@ test("authenticates, uploads ZIP members, copies raw JSON, and isolates history"
   ]);
 
   await expect(page.getByTestId("selected-file")).toHaveCount(2);
+  const importedResponse = page.waitForResponse(response =>
+    new URL(response.url()).pathname === "/api/v2/runs/imports" &&
+    response.request().method() === "POST");
   await page.getByTestId("upload-submit").click();
-
+  const batch = await (await importedResponse).json();
+  expect(batch.counts).toEqual({ imported: 1, duplicate: 0, unsupported: 2, failed: 2 });
+  const imported = batch.items.find((item: { status: string }) => item.status === "imported");
+  expect(imported.activityId).toMatch(/^[0-9a-f-]{36}$/i);
+  const activityId: string = imported.activityId;
   const batchResults = page.getByTestId("batch-result");
   await expect(batchResults).toHaveCount(5);
-  await expect(batchResults.nth(0)).toContainText("สำเร็จ");
-  await expect(batchResults.nth(1)).toContainText("ไม่สำเร็จ");
-  await expect(batchResults.nth(0)).toContainText("activity.zip::activity.fit");
-  await expect(batchResults.nth(2)).toContainText("สำเร็จ");
-  await expect(batchResults.nth(3)).toContainText("สำเร็จ");
-  await expect(batchResults.nth(4)).toContainText("ไม่สำเร็จ");
-
-  const successfulResult = batchResults.nth(0);
-  await successfulResult.getByRole("link", { name: "ดูรายละเอียด" }).click();
+  await expect(page.locator('[data-testid="batch-result"][data-status="imported"]')).toHaveCount(1);
+  await expect(page.locator('[data-testid="batch-result"][data-status="unsupported"]')).toHaveCount(2);
+  await expect(page.locator('[data-testid="batch-result"][data-status="failed"]')).toHaveCount(2);
+  await page.locator('[data-testid="batch-result"][data-status="imported"]').getByRole("link", { name: "ดูรายละเอียด" }).click();
   await expect(page).toHaveURL(/\/extractions\/[0-9a-f-]{36}(?:\?.*)?$/i);
-  await expect(page.getByRole("tab", { name: "วิเคราะห์" })).toBeVisible();
-  await expect(page.getByTestId("activity-chart-pace")).toBeVisible();
-  await expect(
-    page.getByRole("img", { name: "กราฟเพซต่อรอบ" }),
-  ).toBeVisible();
-
-  const copyActions = page.getByTestId("json-copy-actions");
-  const tablist = page.getByRole("tablist", { name: "มุมมองข้อมูล" });
-  await expect(copyActions).toBeVisible();
-  await expect(page.getByTestId("copy-normalized-json")).toBeVisible();
-  await expect(page.getByTestId("copy-raw-json")).toBeVisible();
-  const copyActionsBox = await copyActions.boundingBox();
-  const tablistBox = await tablist.boundingBox();
-  expect(copyActionsBox).not.toBeNull();
-  expect(tablistBox).not.toBeNull();
-  expect(copyActionsBox!.y + copyActionsBox!.height).toBeLessThanOrEqual(
-    tablistBox!.y,
-  );
-
-  await page.getByTestId("copy-normalized-json").click();
-  await expect(page.getByTestId("copy-normalized-json")).toHaveText("คัดลอกแล้ว");
-  const copiedNormalized = await page.evaluate(() => navigator.clipboard.readText());
-  expect(JSON.parse(copiedNormalized)).toMatchObject({ schemaVersion: "1.0.0" });
-
-  const normalizedDownload = page.waitForEvent("download");
-  await page.getByRole("button", { name: "ดาวน์โหลด JSON แบบวิเคราะห์" }).click();
-  const normalizedPath = await (await normalizedDownload).path();
-  expect(normalizedPath).not.toBeNull();
-  expect(JSON.parse(await readFile(normalizedPath!, "utf8"))).toMatchObject({
-    schemaVersion: "1.0.0",
+  await expect(page.getByRole("region", { name: "Pace / HR / Power", exact: true })).toBeVisible({ timeout: 45_000 });
+  const detailResponse = await context.request.get(`/api/v2/runs/${activityId}`);
+  expect(detailResponse.ok()).toBe(true);
+  const detail = await detailResponse.json();
+  expect(detail.normalized.summary).toMatchObject({
+    distanceMeters: 1000, timerTimeSeconds: 300, elapsedTimeSeconds: 360, movingTimeSeconds: null,
   });
-
-  await page.getByRole("tab", { name: "ข้อมูลดิบ" }).click();
-  await expect(page.getByTestId("raw-json-view")).toContainText('"kind"');
-  await page.getByRole("button", { name: "คัดลอก Raw JSON" }).click();
-  await expect(page.getByRole("button", { name: "คัดลอกแล้ว" })).toBeVisible();
-  const copiedRaw = await page.evaluate(() => navigator.clipboard.readText());
-  expect(copiedRaw).toBe(
-    await page.getByTestId("raw-json-view").textContent(),
-  );
-  await page.evaluate(() => {
-    Object.defineProperty(navigator, "clipboard", {
-      configurable: true,
-      value: {
-        writeText: async () => {
-          throw new Error("clipboard permission denied");
-        },
-      },
+  for (const [mode, label] of [["coach", "Coach"], ["full", "Full"]] as const) {
+    const section = page.getByRole("region", { name: `ส่งออก ${label} JSON`, exact: true });
+    const preparedResponse = page.waitForResponse(response =>
+      new URL(response.url()).pathname === "/api/v2/runs/exports" &&
+      response.request().method() === "POST");
+    await section.getByRole("button", { name: `เตรียม ${label} JSON`, exact: true }).click();
+    const snapshot = await (await preparedResponse).json();
+    const validated = await context.request.head(snapshot.downloadUrl);
+    expect(validated.ok()).toBe(true);
+    expect(validated.headers()["content-length"]).toBe(String(snapshot.byteLength));
+    expect((await validated.body()).byteLength).toBe(0);
+    const serverResponse = await context.request.get(snapshot.downloadUrl);
+    expect(serverResponse.ok()).toBe(true);
+    const serverBytes = await serverResponse.body();
+    expect(serverBytes.at(-1)).toBe(10);
+    expect(snapshot.privacyOmissions).toEqual(JSON.parse(serverBytes.toString()).privacyOmissions);
+    expect(JSON.parse(serverBytes.toString())).toMatchObject({
+      schemaVersion: "2.0.0", mode, selection: [activityId],
+      privacy: { includeLocation: false, includeDeviceIdentifiers: false },
     });
-  });
-  await page.getByRole("button", { name: "คัดลอกแล้ว" }).click();
-  await expect(page.getByRole("alert")).toContainText("คัดลอกไม่สำเร็จ");
-  await expect(page.getByTestId("raw-json-view")).toContainText('"kind"');
-  expect(JSON.parse(copiedRaw)).toEqual(expect.any(Array));
-
-  const rawDownload = page.waitForEvent("download");
-  await page.getByRole("button", { name: "ดาวน์โหลด Raw JSON" }).click();
-  const rawPath = await (await rawDownload).path();
-  expect(rawPath).not.toBeNull();
-  expect(JSON.parse(await readFile(rawPath!, "utf8"))).toEqual(
-    expect.any(Array),
-  );
+    await section.getByRole("button", { name: "ตรวจ snapshot ก่อน Copy" }).click();
+    await section.getByRole("button", { name: `Copy ${label} JSON`, exact: true }).click();
+    await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(serverBytes.toString());
+    const download = page.waitForEvent("download");
+    await section.getByRole("button", { name: `Download ${label} JSON`, exact: true }).click();
+    const path = await (await download).path();
+    expect(await readFile(path!)).toEqual(serverBytes);
+  }
 
   await page.getByRole("link", { name: "Runs", exact: true }).click();
   await expect(page).toHaveURL(/\/history(?:\?.*)?$/);
   const historyTable = page.getByTestId("history-table");
-  await expect(historyTable).toContainText("activity.zip::activity.fit");
-  await expect(historyTable).toContainText("corrupt.zip");
-  await expect(historyTable).toContainText("วันที่กิจกรรม");
-  await expect(historyTable).toContainText("ประเภทกิจกรรม");
-
+  const successfulRow = historyTable.locator("tr").filter({
+    has: page.getByRole("checkbox", { name: `เลือกกิจกรรม ${activityId}`, exact: true }),
+  });
+  await expect(successfulRow).toBeVisible();
   await page.getByLabel("เรียงลำดับ").selectOption("asc");
   await expect(page).toHaveURL(/\/history\?.*order=asc/);
-  const successfulRow = historyTable.locator("tr").filter({
-    hasText: "activity.zip::activity.fit",
-  });
-  await expect(successfulRow.locator("td").nth(2)).not.toHaveText("กิจกรรม");
-  await expect(successfulRow.locator("td").nth(3)).not.toHaveText("กิจกรรม");
   await successfulRow.getByRole("link", { name: "เปิดดู" }).click();
   await expect(page).toHaveURL(/\/extractions\/[0-9a-f-]{36}\?.*order=asc/i);
   await page.getByRole("link", { name: "กลับไปประวัติ", exact: true }).click();
   await expect(page.getByLabel("เรียงลำดับ")).toHaveValue("asc");
-  await successfulRow
-    .getByRole("button", {
-      name: "ลบ activity.zip::activity.fit",
-    })
-    .click();
-  const confirmation = page.getByTestId("confirm-delete");
-  await expect(confirmation).toBeVisible();
-  await confirmation.getByRole("button", { name: "ลบรายการ", exact: true }).click();
-  await expect(historyTable).not.toContainText("activity.zip::activity.fit");
-  await expect(historyTable).toContainText("corrupt.zip");
 
   await page.getByRole("button", { name: "ออกจากระบบ" }).click();
-  await expect(
-    page.getByRole("button", { name: "เข้าสู่ระบบด้วย Google" }),
-  ).toBeVisible();
+  await expect(page.getByRole("button", { name: "เข้าสู่ระบบด้วย Google" })).toBeVisible();
   await page.goto("/api/v1/auth/test-login?user=bob");
   await expect(page.getByText("bob", { exact: true })).toBeVisible();
   await page.getByRole("link", { name: "Runs", exact: true }).click();
-  await expect(page.getByText("ยังไม่มีไฟล์ที่อัปโหลด")).toBeVisible();
-
+  await expect(historyTable).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "เตรียม Coach JSON", exact: true })).toBeDisabled();
+  const denied = await context.request.get(`/api/v2/runs/${activityId}`);
+  expect(denied.status()).toBe(404);
   await page.getByRole("button", { name: "ออกจากระบบ" }).click();
   await page.goto("/api/v1/auth/test-login?user=alice");
   await expect(page.getByText("alice", { exact: true })).toBeVisible();
   await page.getByRole("link", { name: "Runs", exact: true }).click();
-  await expect(historyTable).toContainText("corrupt.zip");
-  await page.getByRole("button", { name: "ล้างประวัติ" }).click();
-  await expect(confirmation).toBeVisible();
-  const clearResponse = page.waitForResponse(
-    (response) =>
-      new URL(response.url()).pathname === "/api/v1/extractions" &&
-      response.request().method() === "DELETE",
-  );
-  const refreshedHistory = page.waitForResponse(
-    (response) =>
-      new URL(response.url()).pathname === "/api/v1/extractions" &&
-      response.request().method() === "GET",
-  );
-  await confirmation
-    .getByRole("button", { name: "ล้างประวัติ", exact: true })
-    .click();
-  expect((await clearResponse).status()).toBe(204);
-  expect(await (await refreshedHistory).json()).toMatchObject({ total: 0 });
-
+  await expect(successfulRow).toBeVisible();
+  await successfulRow.getByRole("button", { name: `ลบกิจกรรม ${activityId}`, exact: true }).click();
+  const confirmation = page.getByTestId("confirm-delete");
+  const deleted = page.waitForResponse(response =>
+    new URL(response.url()).pathname === `/api/v2/runs/${activityId}` &&
+    response.request().method() === "DELETE");
+  await confirmation.getByRole("button", { name: "ลบรายการ", exact: true }).click();
+  expect((await deleted).status()).toBe(204);
+  await expect(successfulRow).toHaveCount(0);
+  expect((await context.request.get(`/api/v2/runs/${activityId}`)).status()).toBe(404);
   await testInfo.attach("final-url", {
     body: page.url(),
     contentType: "text/plain",

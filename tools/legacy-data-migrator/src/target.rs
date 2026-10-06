@@ -26,6 +26,10 @@ const TARGET_TABLES: &[&str] = &[
     "oauth_refresh_tokens",
     "transcript_entries",
     "legacy_imports",
+    "runs_sources",
+    "runs_activities",
+    "runs_manifests",
+    "runs_revisions",
 ];
 
 #[derive(Clone, Debug)]
@@ -193,7 +197,6 @@ fn target_constraints() -> BTreeMap<&'static str, Vec<&'static str>> {
             "activities",
             vec![
                 "PRIMARY KEY (id)",
-                "FOREIGN KEY (id) REFERENCES extractions(id) ON DELETE CASCADE",
                 "FOREIGN KEY (owner_id) REFERENCES users(id) ON DELETE CASCADE",
             ],
         ),
@@ -434,10 +437,10 @@ async fn import_transaction(
     }
 
     let (target_garmin, target_intake) = if already_imported {
+        verify_foreign_keys(tx).await?;
         let target_garmin = read_garmin_target(tx).await?;
         let target_intake = read_intake_target(tx).await?;
         compare_snapshot_manifests(&target_garmin, &target_intake, garmin, intake)?;
-        verify_foreign_keys(tx).await?;
         verify_sequences(tx, &target_intake).await?;
         (target_garmin, target_intake)
     } else {
@@ -451,12 +454,12 @@ async fn import_transaction(
         insert_oauth_access_tokens(tx, &garmin.oauth_access_tokens).await?;
         insert_oauth_refresh_tokens(tx, &garmin.oauth_refresh_tokens).await?;
         insert_transcript_entries(tx, &intake.transcript_entries).await?;
+        verify_foreign_keys(tx).await?;
 
         let target_garmin = read_garmin_target(tx).await?;
         let target_intake = read_intake_target(tx).await?;
         compare_snapshot_manifests(&target_garmin, &target_intake, garmin, intake)?;
         repair_sequences(tx, &target_intake).await?;
-        verify_foreign_keys(tx).await?;
         (target_garmin, target_intake)
     };
 
@@ -522,10 +525,10 @@ pub async fn verify(
         &intake.manifests(),
         intake.source_sha256(),
     )?;
+    verify_foreign_keys(&mut tx).await?;
     let target_garmin = read_garmin_target(&mut tx).await?;
     let target_intake = read_intake_target(&mut tx).await?;
     compare_snapshot_manifests(&target_garmin, &target_intake, garmin, intake)?;
-    verify_foreign_keys(&mut tx).await?;
     verify_sequences(&mut tx, &target_intake).await?;
 
     let mut report = Report::new("verify", false).status("verified");
@@ -1352,8 +1355,17 @@ async fn read_target_extractions(tx: &mut Transaction<'_, Postgres>) -> Result<V
 }
 
 async fn read_target_activities(tx: &mut Transaction<'_, Postgres>) -> Result<Vec<ActivityRow>> {
+    // Integrity is checked before this snapshot: only extraction-free native
+    // identities are outside the legacy SQLite activity count and digest.
     let rows = sqlx::query_as::<_, (String, String, Option<String>, String, String, String)>(
-        "SELECT id, owner_id, sport, started_at, activity_data, created_at FROM activities ORDER BY id",
+        "SELECT id, owner_id, sport, started_at, activity_data, created_at
+         FROM activities AS activity
+         WHERE EXISTS (SELECT 1 FROM extractions WHERE id = activity.id)
+            OR NOT EXISTS (
+                SELECT 1 FROM runs_activities AS native
+                WHERE native.id = activity.id AND native.owner_id = activity.owner_id
+            )
+         ORDER BY id",
     )
     .fetch_all(&mut **tx)
     .await
@@ -1600,7 +1612,36 @@ async fn verify_foreign_keys(tx: &mut Transaction<'_, Postgres>) -> Result<()> {
         ),
         (
             "activities",
-            "SELECT EXISTS (SELECT 1 FROM activities AS child LEFT JOIN extractions AS extraction ON extraction.id = child.id LEFT JOIN users AS parent ON parent.id = child.owner_id WHERE extraction.id IS NULL OR parent.id IS NULL)",
+            "SELECT EXISTS (
+                SELECT 1 FROM activities AS child
+                LEFT JOIN extractions AS extraction ON extraction.id = child.id
+                LEFT JOIN users AS parent ON parent.id = child.owner_id
+                WHERE parent.id IS NULL
+                   OR CASE WHEN extraction.id IS NOT NULL
+                      THEN extraction.user_id <> child.owner_id
+                      ELSE NOT EXISTS (
+                          SELECT 1 FROM runs_activities AS native
+                          JOIN runs_sources AS source
+                            ON source.id = native.source_id AND source.owner_id = native.owner_id
+                          JOIN runs_manifests AS manifest
+                            ON manifest.id = native.current_manifest_id
+                           AND manifest.activity_id = native.id AND manifest.owner_id = native.owner_id
+                          JOIN runs_revisions AS decoded
+                            ON decoded.id = manifest.decoded_revision_id AND decoded.activity_id = native.id
+                           AND decoded.owner_id = native.owner_id AND decoded.stage = 'decoded'
+                          JOIN runs_revisions AS normalized
+                            ON normalized.id = manifest.normalized_revision_id AND normalized.activity_id = native.id
+                           AND normalized.owner_id = native.owner_id AND normalized.stage = 'normalized'
+                          JOIN runs_revisions AS analysis
+                            ON analysis.id = manifest.analysis_revision_id AND analysis.activity_id = native.id
+                           AND analysis.owner_id = native.owner_id AND analysis.stage = 'analysis'
+                          WHERE native.id = child.id AND native.owner_id = child.owner_id
+                            AND native.session_index = 0 AND source.integrity = 'verified'
+                            AND source.size_bytes > 0 AND source.size_bytes <= 20971520
+                            AND octet_length(source.bytes) = source.size_bytes
+                            AND sha256(source.bytes) = source.sha256
+                      ) END
+            )",
         ),
         (
             "oauth_authorization_codes",

@@ -19,3 +19,6 @@ thiserror = "2"
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 
 [dev-dependencies]
+garmin-fit-extractor-api = { path = "../../apps/api" }
+uuid = "1"
+url = "2"

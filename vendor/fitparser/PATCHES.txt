@@ -1,0 +1,60 @@
+Vendored dependency: fitparser 0.11.0
+Upstream: https://github.com/stadelmanma/fitparse-rs
+Upstream revision: fb82202b34d10c2166784db333d9d23a29b79a49
+Upstream crate directory: fitparser
+License: MIT; see LICENSE (Copyright 2020 Matthew Stadelman).
+Generated upstream FIT profile: 21.202.0.
+
+This directory contains the upstream Rust source and the minimum library
+manifest. No official Garmin SDK package, examples, or upstream FIT fixtures
+are included. Upstream tests that require those fixtures are omitted. Local
+public-interface regressions construct original synthetic FIT files in memory.
+
+Local patches:
+- File headers consume the declared size (minimum 12 bytes), not a fixed
+  12/14-byte prefix. The optional CRC stays at bytes 12–13 and validates bytes
+  0–11. Unknown extension bytes are opaque, advance the data boundary, and
+  participate in the final file CRC. A 13-byte header has no complete optional
+  CRC field; its extra byte participates in the final file CRC.
+- Component extraction rejects incomplete bit ranges instead of reading absent
+  bits as zero. Expanded arrays contain only complete encoded components.
+  Encoded zero remains valid, including at an accumulated-component rollover.
+- Accumulated components reconstruct low bits against the last full native
+  target or previous expanded component. Native anchors retain their actual
+  scale/offset, and each array component updates the carry sequentially.
+  Full native anchors decode before packed fields within the same message.
+  The profile's accumulated targets are distance, total_cycles,
+  accumulated_power, and HR event_timestamp. This is not an HR-only patch.
+- KeepCompositeFields continues to retain the native packed composite.
+  Expanded fields carry the actual encoded parent field number. Native source
+  composites carry is_composite() even when no complete component is available,
+  so packed 0xff bits can be distinguished from ordinary byte sentinels.
+- FieldDefinition exposes field_definition_number(), size(), and base_type().
+  DeveloperFieldDefinition exposes field_number(), size(), and
+  developer_data_index(). FitDataField exposes developer_data_index(),
+  scale(), offset(), profile_type(), component_parent(), and is_composite(). Profile metadata
+  comes from the actual builder arguments; unknown fields have no profile
+  metadata. Developer descriptions supply real scale/offset but no native
+  profile type. Profile type names use stable FIT snake_case labels, including
+  date_time and local_date_time. Added metadata is skipped by serde, preserving
+  the legacy serialized field shape.
+- PreserveInvalidValues is opt-in. It preserves scalar and wholly invalid
+  fields as Value::Invalid, plus invalid array positions. Invalid timestamps
+  remain invalid instead of being converted to the FIT epoch. Packed Byte
+  values, including 0xff, are retained for bit extraction. Exact wire sentinel
+  bytes remain the archive caller's responsibility.
+- PreserveUnknownDeveloperFields is opt-in. It preserves an undescribed
+  developer field as opaque Byte values with its developer index and field
+  number. The archive caller can report missing-description warnings. Default
+  decoding still rejects missing developer descriptions.
+
+Default decoding remains unchanged except for the component bounds,
+accumulation, and extended-header corrections. Neither opt-in archive option
+is enabled implicitly.
+
+Scoped verification:
+  cargo test --manifest-path vendor/fitparser/Cargo.toml --test components
+The public from_bytes regressions cover a 100-second HR anchor followed by
+101/102-second packed events, native composites, zero rollover, incomplete
+components, literal 0xff bytes, opt-in invalid presence, opaque developer
+identity, scaled distance anchors, and carry between packed messages.

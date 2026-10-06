@@ -761,8 +761,6 @@ checksum = "5baebc0774151f905a1a2cc41989300b1e6fbb29aff0ceffa1064fdd3088d582"
 [[package]]
 name = "fitparser"
 version = "0.11.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "56a834aed7c01a500afb06ebcfde59a4dcfd1de7ce15ae501462934d59655376"
 dependencies = [
  "chrono",
  "nom",
@@ -850,6 +848,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4577ecaa3c4f96589d473f679a71b596316f6641bc350038b962a5daf0085d7a"
 
 [[package]]
+name = "futures-macro"
+version = "0.3.33"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2d6d3cde68c518367be28956066ddfef33813991b77a55005a69dae04bf3b10b"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.119",
+]
+
+[[package]]
 name = "futures-sink"
 version = "0.3.33"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -869,6 +878,7 @@ checksum = "a77a90a256fce34da66415271e30f94ee91c57b04b8a2c042d9cf3220179deaa"
 dependencies = [
  "futures-core",
  "futures-io",
+ "futures-macro",
  "futures-sink",
  "futures-task",
  "memchr",
@@ -884,6 +894,8 @@ dependencies = [
  "axum-extra",
  "chrono",
  "fitparser",
+ "futures-util",
+ "libc",
  "openidconnect",
  "rand 0.9.5",
  "reqwest",
@@ -1372,6 +1384,7 @@ name = "legacy-data-migrator"
 version = "0.1.0"
 dependencies = [
  "clap",
+ "garmin-fit-extractor-api",
  "libsqlite3-sys",
  "serde",
  "serde_json",
@@ -1379,6 +1392,8 @@ dependencies = [
  "sqlx",
  "thiserror 2.0.19",
  "tokio",
+ "url",
+ "uuid",
 ]
 
 [[package]]

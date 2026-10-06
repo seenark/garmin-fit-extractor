@@ -1,37 +1,37 @@
 # FIT Coach: คู่มือทดสอบในเครื่อง (Local Smoke Test)
 
-คู่มือนี้ทดสอบเส้นทางเว็บและข้อมูลกิจกรรมด้วย debug users โดย **ไม่ใช้ Google OAuth จริงและไม่เชื่อม Custom GPT** เหมาะสำหรับตรวจว่า session, upload, history และ activity projection ทำงานตามเจ้าของข้อมูล
+This is a disposable local smoke procedure for debug sessions and the Runs v2/FIT Coach boundary. It does not verify real Google login or a connected Custom GPT. Core must be merged before these commands exercise the new contract; no successful run of this procedure is claimed here.
 
 ## ขอบเขตและข้อควรระวัง
 
 - ใช้ `GARMIN_FIT_TEST_AUTH=true` เฉพาะการทดสอบในเครื่อง ห้ามเปิดบนเซิร์ฟเวอร์สาธารณะ
 - ไม่ต้องตั้งค่า `GARMIN_FIT_CHATGPT_CLIENT_ID`, `GARMIN_FIT_CHATGPT_CLIENT_SECRET` หรือ `GARMIN_FIT_CHATGPT_REDIRECT_URI` สำหรับ smoke test นี้ ปล่อยว่างทั้งชุดได้
 - อย่าใส่ค่า secret จริงในไฟล์ที่ commit หรือในคำสั่งที่บันทึกลง shell history
-- ต้องมีไฟล์ fixture `apps/api/tests/fixtures/activity.zip` ตาม repository ปัจจุบัน
+- Use `apps/api/tests/fixtures/runs/garmin_run.zip`, the synthetic Garmin-running fixture. The legacy `activity.zip` fixture is not supported Garmin-running input.
+- Follow the README's disposable PostgreSQL 18 verification prerequisites. Do not use normal Compose, `./db-data`, a shared development database, or an ambient `.env` for this smoke.
 
 ## 1. เตรียมตัวแปรและรันเว็บ
 
-จาก root ของ repository:
+Use a secret-free source archive. Supply the verified disposable PostgreSQL URL
+explicitly; the database must contain no valuable data. Clear inherited Google
+and FIT Coach credentials. Debug auth must bind only to loopback.
 
 ```sh
+: "${TEST_DATABASE_URL:?Set the verified disposable PostgreSQL 18 URL}"
+export DATABASE_URL="$TEST_DATABASE_URL"
 export GARMIN_FIT_TEST_AUTH=true
 export GARMIN_FIT_BIND=127.0.0.1:3000
-export POSTGRES_DB=garmin_fit_local
-export POSTGRES_USER=garmin_fit_local
-export POSTGRES_PASSWORD=REPLACE_WITH_URL_SAFE_PASSWORD
-export DATABASE_URL=postgresql://garmin_fit_local:REPLACE_WITH_URL_SAFE_PASSWORD@127.0.0.1:5432/garmin_fit_local
-export GARMIN_FIT_GOOGLE_CLIENT_ID=
-export GARMIN_FIT_GOOGLE_CLIENT_SECRET=
-export GARMIN_FIT_GOOGLE_REDIRECT_URI=
-export GARMIN_FIT_CHATGPT_CLIENT_ID=
-export GARMIN_FIT_CHATGPT_CLIENT_SECRET=
-export GARMIN_FIT_CHATGPT_REDIRECT_URI=
-docker compose up -d postgres
-bun run build
-
-cargo run -p garmin-fit-extractor-api
-
+unset GARMIN_FIT_GOOGLE_CLIENT_ID GARMIN_FIT_GOOGLE_CLIENT_SECRET GARMIN_FIT_GOOGLE_REDIRECT_URI
+unset GARMIN_FIT_CHATGPT_CLIENT_ID GARMIN_FIT_CHATGPT_CLIENT_SECRET GARMIN_FIT_CHATGPT_REDIRECT_URI
+bun --no-env-file install --frozen-lockfile
+cargo build --locked -p garmin-fit-extractor-api
+./target/debug/garmin-fit-extractor-api
 ```
+
+If `CARGO_TARGET_DIR` changes the executable location, use that actual built
+binary instead. The running API must be able to launch its own decoder-child
+mode and create a private temporary workspace. Do not point
+`RUNS_DECODER_EXECUTABLE` at a Rust test harness or an old API binary.
 
 เปิดอีก terminal แล้วตรวจ health endpoint:
 
@@ -43,34 +43,40 @@ curl --fail http://127.0.0.1:3000/healthz
 
 ## 2. สร้าง debug sessions และอัปโหลดแยกผู้ใช้
 
-กลไก debug login ของ repository ใช้สำหรับจำลอง Google session เท่านั้น ชื่อ endpoint/รูปแบบที่แน่นอนให้ยึดจาก `scripts/e2e.ts` และเส้นทาง `test-login` ที่มีอยู่ในโค้ดปัจจุบัน อย่าเพิ่ม `owner_id`, `user_id` หรือ `email` ลง multipart เพราะเจ้าของต้องมาจาก session:
+Create two debug sessions. Owner identity comes only from the session cookie,
+never an `owner_id`, `user_id`, or `email` multipart field. Keep cookies private
+in a unique directory in the terminal used for the following commands:
 
 ```sh
-curl -i -c /tmp/fit-user-a.cookies \
+umask 077
+SMOKE_DIR="$(mktemp -d /tmp/fit-coach-smoke.XXXXXX)"
+curl --fail -c "$SMOKE_DIR/user-a.cookies" \
   'http://127.0.0.1:3000/api/v1/auth/test-login?user=a@example.test'
-
-curl -i -c /tmp/fit-user-b.cookies \
+curl --fail -c "$SMOKE_DIR/user-b.cookies" \
   'http://127.0.0.1:3000/api/v1/auth/test-login?user=b@example.test'
 
-curl --fail -b /tmp/fit-user-a.cookies \
-  -F 'files=@apps/api/tests/fixtures/activity.zip' \
-  http://127.0.0.1:3000/api/v1/extractions
-
-curl --fail -b /tmp/fit-user-b.cookies \
-  -F 'files=@apps/api/tests/fixtures/activity.zip' \
-  http://127.0.0.1:3000/api/v1/extractions
+curl --fail -b "$SMOKE_DIR/user-a.cookies" \
+  -F 'files=@apps/api/tests/fixtures/runs/garmin_run.zip' \
+  http://127.0.0.1:3000/api/v2/runs/imports
+curl --fail -b "$SMOKE_DIR/user-b.cookies" \
+  -F 'files=@apps/api/tests/fixtures/runs/garmin_run.zip' \
+  http://127.0.0.1:3000/api/v2/runs/imports
 ```
 
-ถ้า debug harness ใน checkout นี้ใช้ชื่อ query หรือ path ต่างจากตัวอย่าง ให้ copy รูปแบบจาก `scripts/e2e.ts` โดยตรง; ห้ามเดาค่า identity หรือส่งค่าเจ้าของจาก browser
+Review `items` and `counts`; import acceptance can still mean queued processing.
+Use each returned `activityId` to poll `/api/v2/runs/{id}` until ready or failed,
+with a finite local deadline. A timeout is a failed smoke, not a ready result.
 
 ตรวจ history ของแต่ละ session:
 
 ```sh
-curl --fail -b /tmp/fit-user-a.cookies http://127.0.0.1:3000/api/v1/extractions
-curl --fail -b /tmp/fit-user-b.cookies http://127.0.0.1:3000/api/v1/extractions
+curl --fail -b "$SMOKE_DIR/user-a.cookies" http://127.0.0.1:3000/api/v2/runs
+curl --fail -b "$SMOKE_DIR/user-b.cookies" http://127.0.0.1:3000/api/v2/runs
 ```
 
-แต่ละรายการควรเป็นของผู้ใช้ตัวเองเท่านั้น การอัปโหลดที่ไม่มี start time ของ FIT อาจอยู่ใน web history แต่จะไม่ถูกฉายเข้า coach activities.
+Confirm each session sees only its own activities. Identical source bytes are
+deduplicated within one owner, not across owners. Readiness and owner isolation
+must be observed before proceeding to the preserved OAuth projection.
 
 ## 3. ตรวจ activity API ด้วย OAuth debug config (ทางเลือก)
 
@@ -85,7 +91,7 @@ export GARMIN_FIT_CHATGPT_REDIRECT_URI=https://local.test/oauth/callback
 หลัง restart แอป ให้เปิด authorize ด้วย cookie ของ User A (เปลี่ยน `state` เป็นค่าสุ่มของคุณ):
 
 ```sh
-curl -i -b /tmp/fit-user-a.cookies -G \
+curl -i -b "$SMOKE_DIR/user-a.cookies" -G \
   --data-urlencode 'client_id=FIT_COACH_CHATGPT' \
   --data-urlencode 'redirect_uri=https://local.test/oauth/callback' \
   --data-urlencode 'response_type=code' \
@@ -129,4 +135,13 @@ https://REPLACE_WITH_HOST/api/v1/auth/callback
 
 ตั้ง `GARMIN_FIT_GOOGLE_CLIENT_ID`, `GARMIN_FIT_GOOGLE_CLIENT_SECRET` และ `GARMIN_FIT_GOOGLE_REDIRECT_URI` ให้ตรงกันทั้งหมด แล้วตรวจผ่าน browser ที่ `https://REPLACE_WITH_HOST/`. ต้องไม่ใช้ HTTP หรือ localhost เป็น callback ของ production-like tunnel. Cloudflare tunnel ต้องส่ง hostname เดียวกันมายัง app port 3000.
 
-หลังทดสอบเสร็จหยุด service ด้วย `docker compose stop garmin-fit-extractor postgres` และเก็บ `db-data` ไว้หากต้องตรวจซ้ำ. ChatGPT ยังไม่เกี่ยวข้องกับการตรวจนี้: ตัวแปร ChatGPT ทั้งชุดปล่อยว่างได้ และ upload/history ของเว็บยังใช้ Google session ได้ตามปกติ
+Stop only the API and disposable cluster you created. Remove the two cookie
+files and then the owned empty directory:
+
+```sh
+rm "$SMOKE_DIR/user-a.cookies" "$SMOKE_DIR/user-b.cookies"
+rmdir "$SMOKE_DIR"
+```
+
+Do not stop a shared Compose stack or reuse its `db-data`. Debug sessions do
+not prove real Google login. This local procedure does not deploy or reset Runs.

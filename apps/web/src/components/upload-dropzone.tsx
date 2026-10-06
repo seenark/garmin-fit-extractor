@@ -27,7 +27,7 @@ export function UploadDropzone({
     <section className="card upload-card" aria-labelledby="upload-card-title">
       <div className="section-heading">
         <div>
-          <h2 id="upload-card-title">เลือกไฟล์ ZIP</h2>
+          <h2 id="upload-card-title">เลือกไฟล์ FIT หรือ ZIP</h2>
           <p className="section-note">
             ลากไฟล์มาวางที่นี่ หรือกดเลือกไฟล์จากคอมพิวเตอร์ก็ได้
           </p>
@@ -57,9 +57,9 @@ export function UploadDropzone({
       >
         <input
           className="file-input"
-          aria-label="เลือกไฟล์ ZIP"
+          aria-label="เลือกไฟล์ FIT หรือ ZIP"
           type="file"
-          accept=".zip,.ZIP"
+          accept=".fit,.FIT,.zip,.ZIP"
           multiple
           disabled={disabled}
           onChange={(event) => {
@@ -79,7 +79,7 @@ export function UploadDropzone({
           <path d="M16 21V5m0 0-5 5m5-5 5 5" />
           <path d="M7 17v8h18v-8" />
         </svg>
-        <span className="dropzone-title">ลากไฟล์ ZIP มาวางที่นี่</span>
+        <span className="dropzone-title">ลากไฟล์ FIT หรือ ZIP มาวางที่นี่</span>
         <span className="dropzone-copy">หรือเลือกจากคอมพิวเตอร์</span>
         <span className="button secondary" aria-hidden="true">
           เลือกไฟล์
@@ -121,7 +121,7 @@ export function UploadDropzone({
       ) : null}
 
       <div className="upload-actions">
-        <span className="section-note">รับเฉพาะ ZIP · ไม่เกิน 20 เมกะไบต์ต่อไฟล์</span>
+        <span className="section-note">FIT หรือ ZIP · 1–10 ไฟล์ · ไฟล์ไม่ว่างและไม่เกิน 20 MiB ต่อไฟล์</span>
         <button
           type="button"
           data-testid="upload-submit"
@@ -129,7 +129,7 @@ export function UploadDropzone({
           aria-busy={disabled}
           onClick={onSubmit}
         >
-          {disabled ? "กำลังอัปโหลดและแยกข้อมูล…" : "อัปโหลดไฟล์ ZIP"}
+          {disabled ? "กำลังอัปโหลด…" : "อัปโหลดไฟล์"}
         </button>
       </div>
     </section>

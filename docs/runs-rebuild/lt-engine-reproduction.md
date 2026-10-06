@@ -1,0 +1,130 @@
+# การทำซ้ำ numerical engine สำหรับ Runs
+
+อัปเดต 2026-10-05: `running-dfa-open-1.0.0` เป็น experimental ventilatory proxy สำหรับวิ่ง ไม่ใช่ validated blood-lactate LT, Kubios-equivalent preprocessing หรือ automatic zone prescription หลักฐานทั้งหมดในเอกสารนี้เป็น **CC0 synthetic software fixtures** การเทียบ floating-point output ไม่ใช่ physiological validation ดู [method assessment](lt-method-assessment.md) และ [ADR 0005](../adr/0005-runs-threshold-methods.md)
+
+## Engine และ frozen configuration
+
+Public seams อยู่ใน `apps/api/src/runs/analysis.rs` และ `thresholds.rs`: `analyze`, `dfa_window`, `select_decline`, `estimate_history`, `configuration`, `export_projection` รายการพารามิเตอร์จริงพร้อม configuration SHA-256 อยู่ใน `trace.parameters` และ `method.configurationHash`
+
+- Method `running-dfa-open-1.0.0`; workload segmentation `workload-observed-1.0.0`; numerical projection `runs-numerical-input-1.0.0`
+- ใช้หนึ่งค่าต่อ recorded beat ไม่ resample; smoothness-priors λ=500 ด้วย `I + λ² D₂ᵀD₂` และ pentadiagonal Cholesky ที่ใช้ O(n) memory/work จากนั้น integrated centered residual profile
+- Local linear detrending ที่ scales 4–16 beats, non-overlap, discard incomplete scale tail, pooled squared residuals แล้ว root, natural-log OLS สำหรับ alpha ไม่ใช้ randomized RANSAC
+- 120-second centered windows, step 5 seconds, interval ends ใน `(start,end]`; ต้องมี full anchored boundary support, ≥32 beats, weighted observed sample HR coverage ≥95%, sample gap ≤5 s และ RR continuity error ≤0.005 s
+- Native RR ต้องเป็น recorded source พร้อม HR message 132 timestamp field 253, fractional timestamp field 0, event counter field 9 และ absolute beat timestamp ที่สอดคล้อง session-relative time; ไม่ใช้ HRV message arrival เป็น anchor Test-only direct RR ต้องติด `softwareFixture: true` และ explicit synthetic beat bounds ไม่ใช่ production provenance
+- Artifact policy เป็น open replacement: local median 11 beats, raw RR นอก 250–2000 ms หรือ deviation >20% เป็น annotated correction; linear time interpolation เฉพาะระหว่าง clean neighbors และไม่ข้าม source gap Raw RR ไม่ถูกแก้ ทุก window และ unique-beat union ของ regression portion ต้องมี corrected fraction ≤3% ไม่อ้างว่าเหมือน proprietary automatic correction
+- Workload block 30 s; progressive speed slope ≥0.0003 m/s/s; steady speed CV ≤0.08; speed coverage ≥80%; relative surge/recovery step ±15%; repeated surges ต้องพบอย่างน้อยสองครั้ง ไม่มี HR stability filter ตัด drift ไม่มี power ก็ใช้ observed speed ได้
+- Selector freeze ก่อนดู human holdout: contiguous chronological inner alpha `[0.5,1.0]` ≥3 windows และ directly adjacent boundary window ไม่เกินหนึ่งแต่ละด้าน Require negative slope, nonzero HR variance, observed .75/.50 bracket และ fitted crossing ภายใน selected observed HR range ไม่ extrapolate หลาย eligible sections ให้ `ambiguousCrossing`
+- History เลือก latest eligible independent activity แยก target ภายใน 7 วันและไม่เกิน event cutoff ไม่มี pooled sensor calibration หรือ count overlapping windows เป็นหลายกิจกรรม Elect chronological reference frontier แรกที่มี proven RR sensor context หรือ current revision/hash/method-verified timed-RR window evidence; encountered proven sensor boundary ยัง binding แม้ numerical cache stale และอยู่หลัง unknown HR-only row แต่ older known context ไม่ override newer verified unknown RR Observation group ไม่พิสูจน์ sensor equivalence และ unknown context จำกัด source เดียว ไม่มี numerical positive แต่มี actual evaluation ให้เก็บ failed windows/candidates/reasons จริง ไม่คืน placeholder registry trace
+- Timer pause เป็น union ของ source timer events/sample state บน `[start,end)` Stop ที่ session-end ไม่มี pause ก่อนหน้า Recorded timer total ไม่ถูกแก้เมื่อไม่ตรง derived total; `timerTotalsDisagree` แจ้งความต่าง และ full RR window ที่ข้าม pause ใช้ไม่ได้
+
+Unknown recovery, sleep, caffeine, meal timing, medication, treadmill calibration, health suitability และ RR sensor identity เป็น `contextUnverified` ไม่ใช้ user confirmation ปลดล็อกเลข Numerical positive ใช้ `low_confidence`, `engineStatus: experimental`, `researchBlocked: true`; empirical uncertainty interval เป็น `null` ไม่สร้าง person-level CI จาก overlapping-window regression
+
+## Synthetic corpus และ independently frozen oracle
+
+ไฟล์ใน `apps/api/tests/fixtures/` ใช้ prefix `runs-engine-`:
+
+- `dfa-oracle.json`: 257-beat multisine `700 + 14 sin(0.173i) + 7 sin(1.37i) + 3 cos(2.51i)` ms Independent alpha **1.176678239780846** พร้อม F(4)…F(16)
+- `progressive.json`: NumPy PCG64 seed **7429**, 480 s, 1,063 RR intervals และ 481 samples; `ρ(t)=0.97−1.57t/480`, `state=ρ×state+Normal(0,1)`, `RR=600−270t/480+3×state` ms; advance time ด้วย actual RR duration; HR `100+t/6`, speed `2.2+t/480`
+- `progressive-positive.json`: distinct fixture ใช้ seed/ρ เดิมแต่ noise amplitude **6** ไม่แก้ amplitude-3 regression เพื่อให้ LT2 ผ่าน
+- `progressive-oracle.json` และ `progressive-positive-oracle.json`: independent SciPy detrend/nolds DFA/NumPy OLS ของ raw RR และ FIT encoding quantization Native end-counter ticks เป็น `floor(t×1024+0.5)`, interval เป็น counter difference, recorded HR เป็น `floor(HR+0.5)` รวม interpolation/time-weighted window HR จริง ไม่ใส่ canned target ใน engine input
+- `oracle.py`: standalone research-only comparator ไม่ import Rust และไม่เขียน golden จาก engine output
+
+Native synthetic FIT ที่ decoder slice สร้างจาก corpus เดียวกันคือ `apps/api/tests/fixtures/runs/garmin_progressive_rr.fit` และ `progressive_rr_positive.fit` มี HR132 packed event timestamps และ absolute native timing ไม่ใช่ HR-derived RR
+
+Independent numerical runtime ที่รัน: **Python 3.12.13**, **NumPy 2.2.6**, **SciPy 1.15.3**, **nolds 0.6.3** Comparator ตรวจ package versions และ SHA-256 ของ installed `nolds/measures.py`: `53a59a5c24d737539f584d9f86c09228852768308a0539b6cbd7d3ead3eae52a` ใช้ `scipy.linalg.solveh_banded` สร้าง SPD band system โดยอิสระ และ `nolds.dfa(nvals=4..16, overlap=False, order=1, fit_trend='poly', fit_exp='poly', debug_data=True)` Import เฉพาะ pinned measures module เพื่อไม่ดึง unrelated dataset resources จาก package initializer
+
+[nolds versioned source](https://raw.githubusercontent.com/CSchoel/nolds/0.6.3/nolds/measures.py) ใช้ [MIT license](https://raw.githubusercontent.com/CSchoel/nolds/master/LICENSE.txt); comparator import installed package ไม่ vendor proprietary code ใช้ synthetic data ที่ระบุ CC0 ใน fixture manifests ไม่ใช้ private FIT หรือ corpus ที่ไม่มี reuse license
+
+Original strict software agreement requirement: absolute alpha **1e−9**, F(n) **1e−9**, fitted crossing HR **1e−8 bpm** Historical crop/native throwaway harness บางตัว assert F(n) ที่ 1e−8 ก่อน first evaluation ไม่ใช่ independent strict pin และไม่ใช่การ relax หลังเห็นผล; measured maxima ของ original/positive/crops และ competing-decline source ด้านล่างผ่าน strict 1e−9 จริง ตัวเลขนี้เป็น numerical agreement tolerance ไม่ใช่ physiological accuracy หรือ uncertainty ห้าม relax selector/noExtrapolation เพื่อให้ fixture ผ่าน
+
+## คำสั่ง scoped reproduction
+
+จาก repository root:
+
+```sh
+cargo test -p garmin-fit-extractor-api --test runs_engine
+cargo check -p garmin-fit-extractor-api --test runs_engine
+python3 apps/api/tests/fixtures/runs-engine-oracle.py
+```
+
+Python command ต้องใช้ runtime/dependencies ที่ pin ข้างบน Research dependencies ไม่ถูกเพิ่มใน application manifests Rust tests ใช้ public pure-engine seams และ actual generated RR ไม่ใช่ mocked target scalar Native FIT decoder smoke เป็นหลักฐานแยกด้านล่าง ไม่อ้างว่า `runs_engine` test เพียงชุดเดียวเปิด native FIT bytes
+
+เมื่อรวม decoder slice แล้ว ใช้ public writer seam `decode_run_to_writer` และ native beat-bound regression แยกจาก engine projection test:
+
+```sh
+cargo test -p garmin-fit-extractor-api --test runs_decode both_native_progressive_rr_fixtures_match_independent_quantized_beat_bounds -- --exact
+```
+
+คำสั่งนี้ตรวจ native decoder RR timing ของ FIT ทั้งสอง ส่วนการตรวจ native decoder output ต่อ engine และ independent F(n)/alpha/crossing ต้องรวม analysis slice ด้วย ไม่อ้างว่า native decoder test เพียงอย่างเดียวตรวจ physiological estimator
+
+## ผลจาก actual native decoder smoke
+
+รัน public native decoder บน synthetic FIT ทั้งสอง แล้วส่ง actual normalized output เข้า engine เปรียบเทียบทุก window F(n), alpha, candidate selection และ crossing กับ encoded oracle โดยไม่ inject expected output:
+
+- Original amplitude 3: actual LT1 **134.71544856754312 bpm**; LT2 **null / noExtrapolation** Actual rejected .50 crossing **157.41934068501405** เกิน selected observed HR maximum **156.75** Maximum absolute alpha disagreement **4.9934056889355816e−11**, F disagreement **4.73042938153867e−10**
+- Distinct amplitude 6: actual LT1 **136.41887336482208 bpm**, LT2 **160.4210626128638 bpm** Independent expected **136.41887336477964 / 160.42106261369022** Maximum absolute alpha disagreement **2.4642399232277512e−11**, F disagreement **5.050644347193156e−10**
+
+Public history smoke รักษา actual rejected LT2 trace/candidate ของ original FIT และ numerical positive ของ distinct FIT Regression tests ครอบคลุม artifact fractions 3/4/5/6%, constant HR/RR, gaps/pauses, noExtrapolation, ambiguity, late strides, future/deleted/revision-mutated evidence, older independently eligible target, conflicting target order และ condensed verified projection receipt โดยไม่ clamp หรือเติม LT จาก ratio
+
+Timer seam regression ที่ stop 450 s โดยไม่มี sample timer flags ให้ observed pause **30 s**, recorded timer **480 s**, derived timer **450 s** และแจ้ง `timerTotalsDisagree` Original fixture stop 480 s จึงมี pause **0 s** ไม่แอบเปลี่ยน recorded summary ให้ตรง derived result
+
+## Immutable projection และ reproducibility boundaries
+
+Numerical projection เก็บ numeric samples/RR/provenance/laps/timer/sensors ทุกแถว ไม่มี fixed row cap, downsample หรือ truncation Full normalized/decoded archive ยังรักษาข้อมูลอื่นทั้งหมด การตัด repeated references/extensions ที่ engine ไม่ใช้เป็น internal projection ไม่ใช่ full-data export policy
+
+`trace.inputHash` เป็น SHA-256 จาก `serde_json::to_writer` ของ **actual numerical input Value** แบบ streaming ลง SHA writer ไม่สร้าง whole-input string `inputRevision` คือ source normalized revision; `inputNormalizedHash` คือ full normalized archive hash จาก core; `inputProjectionVersion` ระบุ projection format Hash ทั้งสองไม่ถูกเรียกแทนกัน Full-input evidence ถูก hash ใหม่จริง ส่วน condensed history ที่ไม่มี samples ต้องมี `evidenceVerification` จาก authenticated core เท่านั้น:
+
+```json
+{
+  "kind": "immutableNumericalProjection",
+  "revisionId": "the-verified-normalized-revision-id",
+  "inputHash": "the-verified-64-lowercase-hex-projection-digest",
+  "projectionVersion": "runs-numerical-input-1.0.0"
+}
+```
+
+Receipt นี้เป็น internal contract ไม่ใช่ตัวอย่าง proof ที่ส่งจาก public client Core ต้องตรวจ immutable stored manifest, revision และ digest ก่อนสร้าง receipt Engine ยังตรวจ method/config, exact revision/hash, event cutoff, source availability และ recency หาก source มี samples ไม่เชื่อ receipt แทน actual digest Export ใช้ closed aggregate allowlist ไม่ส่ง source IDs/hashes/revisions, unselected windows หรือ last-good payload
+
+## Release blockers ที่ยังคงอยู่
+
+ยังไม่มี licensed paired human **running RR + independent gas-exchange VT1/VT2 หรือ lactate-defined targets** จึงยังไม่ปิด human reference agreement, authorized preprocessing/Kubios comparison, empirical person-level uncertainty/sample-size plan หรือ independent physiological release gate ต้อง preregister population/sensor/protocol/selector/reference-repeat agreement ก่อน human holdout ไม่ตั้ง sample size/CI/LOA ที่ไม่มีข้อมูลรองรับ ไม่อ้าง validated lactate LT, clinical/training safety หรือ auto zone prescriptionจาก synthetic agreement
+
+## Scoped review และ regression proof
+
+Scoped `runs_engine` suite ผ่าน **33 tests** และ `cargo check --test runs_engine` ผ่าน หลังแก้ข้อพบจาก parallel Standards/Spec review และ actual native HR-only/reference-election bug รวม intervening stale-proven-sensor boundary ไม่ได้รัน project-wide suite ใน numerical slice นี้:
+
+- Artifact ที่ raw RR นอก 250–2000 ms แต่มี clean neighbors และ continuous native timing ไม่ตัด RR chain ออกก่อน correction ตัวอย่าง isolated 200 ms มี actual corrected full window ที่ center 240 s พร้อม invalid/corrected count 1 Source raw 200 ms ไม่เปลี่ยน Correction หา endpoints/continuity ครั้งเดียวต่อ consecutive artifact run และใช้ stack median buffer ไม่ rescan ย้อน/ล่วงหน้าทุก beat
+- Coverage ใช้ signal-range validation เดียวกับ numerical features Finite speed 16 m/s ไม่ถือเป็น usable support Sparse valid block endpoints จึงไม่ปลดล็อก progressive eligibility หรือ LT
+- Timer state ต้องพิสูจน์ได้ตลอด **แต่ละ full window** ไม่มี events/flags ให้ `requiredContextUnprovable` และ abstain Partial support 0–180 s ยังใช้ window center 120 s ได้ แต่ center 125 s ข้าม support-end และใช้ไม่ได้ Unknown context นอก selected window ไม่ถูกนำมาอ้างว่าผ่านหรือบังคับ reject ทั้งกิจกรรมโดยไม่มีเหตุ
+- History ตรวจ cached method/revision/hash ก่อนเลือก source ถ้า same-group activity `a` มี stale cache หรือ unknown-identity HR-only analysis แต่ `b` มี actual verified timed-RR analysis ให้ elect `b` แต่ละ targetเลือกsourceเดียวและ independent countไม่เพิ่มจาก duplicate members หรือ overlapping windows Latest actual RR failure ยังเป็น reference ไม่ข้ามไปpositiveจากunknownsensorอื่น; proven sensor changeที่พบก่อนeligibleRRยัง bindingแม้ cache staleและมีunknownHR-onlyrowก่อนหน้า ส่วนolderknowncontextไม่override newerverifiedunknownRR Groupไม่เป็นsensorproof
+- Regression candidates เก็บ raw/corrected/**invalid/missing** counts ของ unique selected source-beat union ไม่บวกซ้ำจาก windows Missing count 0 หมายถึง proved source continuity; gap ที่ไม่รู้ actual missing count เป็น `null` ไม่วินิจฉัยจำนวน physiological missed beats
+- Export รักษา unattempted target `null` และ actual failed target `value: null` พร้อม status/reasons/counts ไม่สร้าง suggestions/trace object ปลอมแทน unattempted result
+
+Red/green proof ของข้อพบข้างต้น: ก่อนแก้ suite มี 25 passed/6 failed; หลังแก้ 31 passed Actual latest native writer output ทั้งสองยังได้ค่า/F(n)/alpha/history/condensed receipt ตรงหลักฐานข้างบน Wrong receipt revision ทำให้ abstain จริง
+
+Scoped throwaway smoke ประมวลผล **100,000 consecutive out-of-range 1-ms RR intervals** โดย source ทุกแถวยังอยู่ครบและไม่แต่ง threshold Source duration 100 s จึงไม่มี complete 120-s window Actual debug analysis ใช้ **2.638445083 s**, process maximum RSS **369,459,200 bytes** ตัวเลขนี้เป็น pathological software smoke หนึ่งกรณี ไม่ใช่ whole-service benchmark หรือ physiological evidence และไม่ได้เพิ่ม cap/downsample/truncation
+
+## Target-only native crops สำหรับ temporal integration proof
+
+ใช้ source amplitude-6 เดิมแบบ crop โดยไม่แก้ RR/HR/speed relationship, seed, selector หรือ method เก็บเฉพาะ intervals ที่มี start/end อยู่ใน source crop และเลื่อน relative clock ตาม crop start Native encoder สร้าง FIT ใหม่พร้อม genuine counter/fractional anchors และ UTC dates แยก old/fresh ตามโจทย์ temporal integration ไม่แทนค่า cached target ใน DB
+
+- Early source **0–320 s**: 321 samples, 634 RR; independent encoded expected LT1 **134.63727703919471 bpm**, LT2 `null`; actual native→engine LT1 **134.6372770392192 bpm**, LT2 `null`
+- Late source **220–480 s**: 261 samples, 651 RR; first supported interval เริ่ม **0.416015625 s** ใน new elapsed clock ไม่เติม interval 0–0.416 ให้ดูครบ First centered window จึงเริ่ม center 65 s ไม่ใช่ 60 s Independent encoded expected LT2 **160.42106261369022 bpm**, LT1 `null`; actual native→engine LT2 **160.4210626128638 bpm**, LT1 `null`
+
+รัน actual native writer outputs ทั้งสี่ old-LT1/fresh-LT2/old-LT2/fresh-LT1 ทุก window F(n)/alpha ตรง independent oracle ภายใน tolerances เดิม Public history ที่ source-end cutoff ให้ target-only result เดียวกันและ timer coverage complete วันที่ native source จริงใน smoke คือ 2026-09-25/2026-10-04 เวลาเริ่ม 13:07:16Z เป็นข้อมูล synthetic ไม่ใช่ historical human evidence ข้อนี้พิสูจน์ native numerical/history seams เท่านั้น ไม่อ้างว่า numerical slice รัน HTTP/PG/lastAvailable integration ซึ่ง integration owner ตรวจแยก
+
+## Genuine native competing declines และ HR-only reference regression
+
+Competing source ใช้สอง copies ของ unchanged amplitude-6 RR values ต่อบน continuous beat clock ที่ offset **479.7492065041358 s** ไม่สร้าง gap480s มี 2,126 RR/961 sample records/960s; observed HR repeat original ramp ขณะที่ workload speedยังmonotonic Native sourceUTC **2026-10-04T15:00:59Z..15:16:59Z** Independent SciPy/nolds oracle freezeก่อน engine และก่อนnative verification รวม second-copy quantization จริง Strict alpha/F **1e−9** และ crossing **1e−8 bpm**:
+
+- Actual LT1 `insufficient_data`, `value:null`, `ambiguousCrossing`; candidates3/accepted2/rejected1 ไม่เลือกอันที่สะดวกกว่า
+- Actual LT2 `low_confidence`, **160.4210626128638 bpm**; accepted1/rejected2ตามnoExtrapolation ไม่บังคับให้ทั้งสอง targetเป็นnull
+- Actual 169 windows/168 accepted/1 tailขาดfullcontinuousboundary; corrected0/timerCoveragecomplete Maximum absolute alpha/F/candidate-crossing disagreements **2.4642399232277512e−11 / 6.309370803592174e−10 / 7.662237067052047e−9 bpm**
+
+Integration artifacts อยู่นอก repository: `/tmp/runs-r2-native/competing_declines.fit` SHA-256 **`e55792ca3f0d9adc730962aff98523f41925fb6ae77fc532b9e98454ad70ccd1`**, actual public-writer normalized output `.fit.normalized.json`, independent `/tmp/runs-competing-declines-oracle.json` SHA-256 **`3b11707349456cb840d74c039a22444d0cc54844b473518e2255609b95c51c06`** และ actual observation `/tmp/runs-r2-native/competing_declines.engine-observation.json` เป็น supplemental CC0 software proof ไม่ใช่ human corpusหรือpermanent fixture dependency
+
+Actual Core-reported HTTP failure ใช้native source pairที่start/end **2026-10-04T14:41:06Z..14:46:26Z** และ321samplemetricsเท่ากันทุกแถว HR-only sourceไม่มีRR132;อีกsourceมี634timedRR132frames appendหลังsession Publicwriterอ่านunchanged binariesจริง Sourceแรกให้actual `noExerciseRR`; sourceสองให้actual LT1 **134.6372770392192** Minimal history-reference fixให้ local full-inputและcondensedverified-receipt-shape smokeเลือกRRsource independentcount1, LT2null/actualnoExtrapolation Permanent regression REDก่อน/GREENหลังครอบคลุม same/differentgroup, unknownsensor actualRRfailureและknownsensorchange guard ไม่poolหรือยกระดับgroupเป็นsensoridentity
+
+Artifacts `/tmp/garmin-runs-core-group-proof/{same-metrics-no-rr,same-metrics-with-rr}.fit.normalized.json` และ `engine-reference-observation.json` พิสูจน์native decoder→numerical/history seam Receiptในlocalsmokeผูกกับactualcomputedhash/revisionแต่ **ไม่ใช่PGmanifestverification proof** Core/integrationownerตรวจauthenticated HTTP/PG/jobs/lastAvailableหลังmerge sourceแยกต่างหาก ไม่รันซ้ำHTTPREDเพื่อconfirmสิ่งที่Coreรายงาน
+
+Focused follow-up Standards/Spec reviewers พบsame three-row edgeคนละแกน: newestunknownHR-only H, interveningprovenBstalecache, olderverifiedpositiveA Referencefrontierfirst(provencontext OR verifiedtimedRRwindows) ปิดedgeนี้ Permanentfull+condensedregression REDก่อน(nonnullolderA) →GREENหลัง(null/noRecentComparableEvidence/inputRevisionB) Suite **33passed**/checkผ่าน Actualunchangednativepair134.6372770392192/count1และR2competingstrictoracleยังผ่านหลังfinalsourcefix Read-onlyclosure **Standards0unresolved/Spec0unresolved** ไม่ใช้ผ่านแกนหนึ่งแทนอีกแกนและไม่claimproject-widevalidation

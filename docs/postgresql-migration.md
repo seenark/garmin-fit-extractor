@@ -2,6 +2,11 @@
 
 This runbook is for the one-time cutover from stopped SQLite copies to the unified Garmin PostgreSQL service. The migrator is read-only by default. It never opens a Docker volume in place and never prints row values.
 
+This legacy migration is a separate operator procedure, not Runs reprocessing
+or a Runs reset. No production migration apply, deployment, or reset is claimed
+by the current integration. Do not treat these commands as disposable test
+setup; normal Compose targets persistent storage.
+
 ## 1. Freeze and archive
 
 1. Schedule a no-write window and stop both old application stacks.
@@ -123,10 +128,17 @@ Before allowing mutating traffic:
 - Public requests cannot read transcript entries.
 - An unauthenticated admin API request returns `401`; an authenticated non-allowlisted user returns `403`.
 - The allowlisted operator can list and edit the preserved transcript row, including its historical ID.
-- Imported history and extraction details show the expected source counts and associations.
+- Imported legacy history retains expected IDs and safe summaries. Source-less rows show `sourceUnavailable` and `LEGACY_SOURCE_UNAVAILABLE`, with null strict-v2 detail/revisions, `409 SOURCE_UNAVAILABLE` on reprocess, and `422 LEGACY_EXPORT_UNSUPPORTED` on export. Do not invent FIT or reinterpret successful legacy storage as strict-v2 readiness.
+- New Garmin-running import/detail/export and the preserved FIT Coach OAuth projection work together after Core is merged and the integrated cutover is verified; obsolete `/api/v1/extractions` APIs return `410 RUNS_ENDPOINT_RETIRED`.
 - PostgreSQL uses the intended intranet firewall policy for the published `5432` port.
 
 Only after all gates pass should the unified service receive traffic. Keep the old SQLite applications stopped and their volumes untouched.
+
+Keep copied original source files private, but do not assume this legacy
+SQLite importer associates them with new Runs v2 revisions. Source recovery
+requires a separately supported and verified association path. No Runs reset
+is part of this migration or automatic startup; reset apply needs separate
+explicit authorization and an accepted scoped dry-run/restore procedure.
 
 ## 5. Rollback boundary
 

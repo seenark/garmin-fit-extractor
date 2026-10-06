@@ -1,6 +1,6 @@
 # การประเมิน decoder สำหรับ Runs rebuild
 
-สถานะ: **PROPOSED / compatibility spike** ไม่ใช่การเปลี่ยน production decoder เอกสารนี้รายงานผลจากไฟล์สังเคราะห์และ fixture สาธารณะเท่านั้น ไม่ได้เปิด FIT ส่วนตัว, `.env`, DB หรือ production ไม่มีการแก้ manifest หรือ source ของระบบ และไม่ได้รัน build/lint/test suite ของ repository ในงานนี้
+สถานะ: **implemented at the public Runs decode seam; release gates remain open** มี implementation ของ Rust decoder/normalization และ corpus สังเคราะห์ที่เก็บถาวรแล้วตามหลักฐานด้านล่าง ผล compatibility spike เดิมยังเป็นหลักฐานเฉพาะกรณี ไม่ใช่การรับรอง full fidelity, physiological validity หรือ deployment budgets งานนี้ไม่เปิด FIT ส่วนตัว, `.env`, DB หรือ production และไม่รัน official Garmin SDK เพิ่ม
 
 ## ข้อเสนอและข้อจำกัดในการตัดสินใจ
 
@@ -154,6 +154,49 @@ Rust default/archive reject corruptionทั้ง 4 cases แต่ helperย�
 Whole-process times/RSS รวม interpreter/runtime startup, module initialization, read ทั้ง corpus ทั้ง modes, conversion, JSON serialization และ output ไม่รวมติดตั้ง package หรือ compilation Per-file `elapsed_ms` ใน JSON ไม่รวม interpreter startup/module import และไม่รวมการเขียน result fileครั้งสุดท้าย Python fitdecode รวม file open, reader initialization, CRC, decoding, capture conversion; official SDK รวม file read, integrity pass แยกอีก 1 pass, decoder initialization และ capture conversion จึงเทียบตรงกับ Rust core decoder ไม่ได้ Rust probe อ่าน bytes ก่อน per-file timer แต่ timer รวม stream processor, native/definition capture และ profile decode
 
 ไม่ได้ทำ repetitions, warm/cold filesystem separation, RSS attributionต่อ activity, largest-file/ZIP-bomb/timeouts/cancellation, worker pool contention, multi-hour samples หรือ statistical latency distribution การตั้ง byte/time/memory/concurrency budgets ต้องมี phase acceptance แยก ไม่ใช้ผลนี้รับรอง scale
+
+## หลักฐาน implementation ที่ตรวจจริง — 2026-10-05
+
+ฐานงานคือ `94a812e0a83fbd5d59a6a05833ea45be36cca139` และ dependency/root-fix commit คือ `7584198c60be7e854c7311d52a6c3b0aedf4b76a` ใช้ `fitparser` 0.11.0 ที่ vendor เฉพาะ Rust source/profile ที่จำเป็น พร้อม MIT `LICENSE`, upstream revision และขอบเขต patch ใน `vendor/fitparser/PATCHES.txt` ไม่รวม official SDK และไม่เพิ่ม runtime service
+
+- แก้ general component bounds และ accumulated targets ใน library ไม่กรอง zero หลัง decode: packed HR 3 bytes มีสอง events เท่านั้น และ native anchor 100 s ให้ events 101/102 s การ carry ครอบคลุม distance/cycles/power/HR ตาม profile พร้อม source parent ของ expanded field
+- Archive เปิด `KeepCompositeFields`, `PreserveInvalidValues` และ `PreserveUnknownDeveloperFields` โดยไม่เปิด numeric-enum mode ทั้งไฟล์ จึงเก็บ wire definition/order, global/local/field identity, developer/application metadata, original composite, expanded parent, byte references และ actual profile/developer scale/offset ได้ Ordinary zero คง zero; encoded invalid มี null/validity และตำแหน่ง array; unsafe integers เป็น decimal strings พร้อม type identity
+- Public seam มีเพียง `fit::runs::decode_run_to_writer` ซึ่งเขียน JSON decoded/normalized/preserved v1 ลง private sink ของ caller ไม่เก็บ whole-archive `Value` และไม่เหลือ normalizer อีกชุด Caller ต้องทิ้ง private output ทุกกรณีที่ decode ไม่สำเร็จ รุ่นนี้ยืนยัน Garmin activity เดียวและ subtype generic/treadmill/street/trail/track โดยไม่ปฏิเสธ foreign accessory เพียงเพราะ manufacturer ของ sensor ต่างกัน Records นอก session คงใน archive แต่ไม่ใส่ใน normalized samples
+- Normalization คง source resolution/order, enhanced speed/altitude precedence, cadence cycles-to-steps ตาม field definition และ source references แยก recorded summaries จาก interval-weighted derived means พร้อม coverage/pause/gap policy ไม่สร้าง pace จาก zero speed และไม่ใช้ cadence heuristic เดิมใน Runs ใหม่ Source timezone context มาจาก FIT เท่านั้น
+- Native `hrv.time` รักษา invalid positions แต่ไม่ให้ UTC alignment จาก message arrival ส่วน packed HR ใช้ timestamp/fractional/full event counter anchor ที่อ่านจริง พร้อม `anchorSourceReferences`; RR มาจาก beat-counter differences ไม่ใช่ reciprocal sampled HR Unknown/developer extensions คงภายในและจำแนก fail-closed
+- Corpus ถาวรอยู่ `apps/api/tests/fixtures/runs/` มี stdlib generator, CC0 license, deterministic hashes, field dictionary, expected arithmetic, synthetic developer identities, malformed streams และ ZIP member manifest Numerical progressive fixture มี source-backed packed RR 1,063 intervals และ independent quantized-input oracle แยกจาก physiological validation
+
+Scoped verification ที่รันจริง:
+
+```sh
+cargo test -p garmin-fit-extractor-api --test fit_decode
+cargo test -p garmin-fit-extractor-api --test runs_decode
+cargo test -p garmin-fit-extractor-api --lib fit::stream::tests
+python3 apps/api/tests/fixtures/runs/generate.py
+```
+
+ผลล่าสุดคือ `fit_decode` 3 tests, `runs_decode` 17 tests และ `fit::stream::tests` 2 tests ผ่าน รวมความผิดพลาดด้าน CRC/header, endian, invalid string/byte/array, rollover, component fallback, zero RR, recorded zero speed และ exact fractional RR anchors ไม่ใช้ non-empty/length-grew checks เป็น consumer proof Packed regression ล้มก่อน root fix ส่วน byte/string sentinel และ selected-summary pace มี failing-before/passing-after หลักฐาน Final review พบ JSON spool parser เปลี่ยน native fractional anchor 9/32768 จน elapsed เป็น 1.000274896621704 แทน 1.000274658203125; permanent public-writer regression ล้มก่อนเปิด `serde_json/float_roundtrip` แล้วผ่าน พร้อม exact UTC timestamp การตรวจ progressive native ทั้งสองไฟล์เปรียบเทียบทุก RR interval กับ independent quantized beat bounds ไม่อ้างว่าการทดสอบ engine อย่างเดียว decode native FIT Generator สร้าง bytes และ manifest ซ้ำได้โดยไม่ใช้ SDK หรือข้อมูลส่วนตัว คำสั่ง `cargo test -p fitparser --lib` ไม่รัน tests เพราะ dependency ไม่ใช่ workspace member จึงไม่อ้างผล vendor suite จากคำสั่งนี้
+
+Standalone CLI smoke ล่าสุดเรียก public `decode_run_to_writer` และ parse JSON จริง: Garmin run 24 messages/4 bounded samples; rich archive 41 messages/12 samples/5 RR ที่ไม่ aligned ทั้งหมด; packed HR 26 messages/2 aligned RR; progressive fixtures ทั้ง original boundary-negative และ positive-oracle ให้ 596 messages/481 samples/1,063 aligned RR ขนาด JSON ล่าสุดของ original/positive คือ 2,540,170/2,539,912 bytes โดย RR source references เก็บ array positions จริงและ metadata แสดง library/profile/options/schema/version/source hashes ที่ตรวจแล้ว Public MIT `activity.fit` มี manufacturer code 15 จึง unsupported สำหรับ Garmin-only Runs ใหม่ แต่ legacy `decode_raw` ยัง decode ได้ตามเดิม
+
+Capacity root fix วัดกับ CC0 `full_export_100k.fit` ที่ generator ถาวรสร้างได้ ไม่เปิดกิจกรรมส่วนตัว Whole-Value path เดิมให้ JSON 825,052,485 bytes, 100.54 s และ max RSS 9,894,985,728 bytes หลังลบ known-field extensions ที่ซ้ำและย้าย arrays โดยไม่ clone ผลเปลี่ยนเป็น 496,794,368 bytes, 45.95 s และ max RSS 4,110,041,088 bytes จึงยังไม่ผ่าน memory budget ไม่รัน baseline เดิมซ้ำเพื่อยืนยันผล
+
+Typed streaming path เขียน decoded messages ลง caller โดยตรง เก็บเฉพาะ typed numerical samples/source references และ legacy fields ที่ใช้งาน ไม่สร้าง decoded-message spool อีก 371 MB Internal arrays ใช้ owned directory 0700, create-new files 0600 และ byte counter ร่วมกับ final writer ที่ hard limit 512 MiB Caller ตั้ง child `TMPDIR` ให้ซ้อนใน private directory เพื่อให้ parent cleanup ครอบคลุม timeout/forced kill Output/control contract ของ subprocess คือ private `run.json` และ `runs-spool-1` control ที่ stdout ไม่เกิน 64 KiB โดย disk bound แยกจาก stdout bound
+
+Actual typed CLI smoke บน Darwin arm64 แบบ debug ให้ 496,794,368 bytes, 42.77 s real (38.89 s user, 0.66 s sys), max RSS 230,719,488 bytes และ peak footprint 223,773,224 bytes ตรวจ JSON ครบ 100,000 samples, indices 0–99,999, distance 0–10,800 m และ cadence แรก 340 steps/min โดยไม่ materialize whole document Layer sizes decoded/normalized/legacy คือ 371,797,035/113,538,063/11,459,234 bytes เท่ากับ changed path ก่อน streaming Private modes 0700/0600 ตรวจจริง และ document SHA-256 คือ `07b0a7907c8f8e715c58177ca2afdf8aa5d60ef43953be86468ec0e8e4b3251c` ผลนี้ยังไม่ใช่ Linux `RLIMIT_AS=512 MiB`/60 s subprocess proof
+
+การวัด capacity ข้างบนเกิดก่อนเพิ่ม safe implementation provenance metadata 613 bytes และ precision regression fix ที่ไม่เปลี่ยน 100k fixture ซึ่งไม่มี RR ไม่รัน 100k path เดิมซ้ำ Final runtime ใช้ `fit::runs::decoder_metadata()` เป็น definition ร่วมสำหรับ archive และ revision metadata: upstream library 0.11.0, maintained decoder `0.11.0+runs.2`, profile 21.202.0, normalizer `native-runs-stream.1`, schemas 2.0.0, actual options และ JSON float-roundtrip flag พร้อม SHA-256 ของ sorted vendored Rust sources/profile decode source/normalizer source/archive adapter/raw projection Source hashes คำนวณจาก bytes ที่ตรวจจริงและต้องปรับเมื่อ source เปลี่ยน แยกจาก private uploaded FIT hash/byte length
+
+ข้อจำกัดที่ยังไม่ผ่านใน slice นี้: Linux production subprocess budgets, physiological reference validation, large real-world FIT distributions, HTTP/store/export round-trip และ private export policy เป็นงาน integration/release Truncated headers, trailing/chained FIT และ declared-size mismatch ถูกปฏิเสธอย่างชัดเจน ไม่ publish partial output เป็น success Subfield reference metadata ที่ library ไม่เปิดและ unknown/later developer descriptions ต้องมีข้อจำกัดหรือ warning; ไม่อ้าง extraction 100% และไม่อ้างว่าการเก็บ Original FIT ชดเชยทุก semantic gap
+
+### Followup: declared extended headers และ CRC — 2026-10-05
+
+Consumer regression พบว่า valid 16-byte header ถูกจำแนก `INVALID_FIT` จาก 12/14-only allowlist และ parser ที่คืน data pointer หลัง byte14 แต่เพิ่ม position ตาม declared size เอกสาร primary ระบุ header ขั้นต่ำ12 bytes และอนุญาต extensions; optional CRC อยู่ fixed bytes12–13 และครอบคลุม bytes0–11 ไม่ได้ย้ายไปท้าย extended header [S1, Table1/File Header] จึงแก้ shared parser ให้ใช้ declared boundary, skip unknown extension bytes แบบ opaque และรวม extension bytesใน final file CRC ไม่ special-case fixture หรือ skip CRC
+
+Public writer regression ล้มก่อนแก้ด้วย `InvalidFit` แล้วผ่าน CLI จริงสำหรับ declared headers12/13/14/15/16 ทั้ง optional CRC0 และ nonzero at fixed offset สังเกต first definition byte offset เท่ากับ declared size, distance1000m/timer300s และ4 normalized samplesทุกกรณี Corrupt header CRC ที่ recompute footer แล้ว, corrupt extension ที่ไม่เปลี่ยน footer, truncated extended header, trailing/chained FIT ยังถูกปฏิเสธ Scoped `fit_decode`3 + `runs_decode`17 + resource2 testsผ่าน ไม่รัน unchanged100kหรือSDKเพิ่ม Opaque extensionsยังอยู่ใน Original FIT ไม่อ้าง interpreted metadataของfuture header
+
+Corpusใหม่48files/43134bytes มี6 public CC0 header casesเพิ่ม โดย42เดิม byte-identical Manifest SHA-256 `efaed438e543aee202d03acf5550c90bf15047c495830aaa8dcf23b26dfe431a` Decoder identifierเป็น `0.11.0+runs.2`; actual vendor source digest `5cba14de1b4f88f3c3a55d755d27ceb8e7fb782027e3786b347b2b1e0a597bf1` และ archive adapter digest `73a6cb5e19a7e1610e185faad8f74b448327ba2ae59df80f284275535a751dd4` อัปเดตตาม source bytesจริง Profile/normalizer/raw digestsไม่เปลี่ยน ไม่เปลี่ยน output/control/disk caps หรือเพิ่ม whole-Value path
+
 
 ## Hard gates ก่อน implementation/cutover
 
