@@ -186,13 +186,59 @@ Prompt templatesเป็น editable textที่ Copyแยก ยึดเ�
 
 ## 11. Reset, backup, rollback และ operations
 
-**ไม่มี reset command execution ในรอบนี้.** Runbookหลังอนุมัติ implementation:
+The standalone `runs-reset` executable implements this protocol. It is not an HTTP endpoint, startup hook, migration, or deployment step. Implementation is not permission to reset real data.
+
+AT-34 is complete on the owned disposable clone: 24 retained refusal cases and three real confirmed applies passed, deleting owner-native 2, remaining-native 198, and explicitly selected running-legacy 1 pairs while preserving protected data, schema, Shoes, and the entire source database. Original physical-restore and 83 unique native redecode receipts remain separately scoped; the final new encrypted dump was authenticated, decrypted, checksum/archive verified, and deleted, not physically restored again. See the verification plan and external acceptance inventory for exact receipts and historical failures. This evidence does not authorize a production reset.
 
 1. Dry-run default; แสดง deployment environment/DB fingerprint/owner-or-all-Runs scope, exact allowlisted tables/storage, counts/bytes/jobs/exports และ protected table counts. ไม่แสดง emails/FIT/pathsจากผู้ใช้
 2. Quiesce affected owner imports/jobs/exports, consistent backup PostgreSQL+original BYTEA+revisions; record schema/application versions/hash manifests. Restore rehearsalใน DB/containerใหม่ แล้ว checksum/redecode original; encrypted restricted backupและ deletion retention policyที่ประกาศ
 3. Applyต้อง explicit environment+scope+dry-run digest confirmation. Recompute dry-runและ abortหาก counts/versionเปลี่ยน ไม่ `DROP DATABASE`, broad `TRUNCATE CASCADE`, delete users หรือ volume deletion
 4. Transaction deletes only approved Runs rows in FK order; assert protected counts/content hashes unchanged. Cleanup private temp remnants; affected worker generation canceled. Container recreationไม่ reset
 5. Restore consistency/orphan/source hash/reference checks; run Shoes/auth/admin/CLI/FIT Coach regression. After new writes, rollback code onlyเมื่อ schema/data compatible; มิฉะนั้น maintenance+roll-forwardหรือ separately approved restoreที่แจ้ง potential newer-write loss ไม่ย้อน DBเงียบๆ
+
+### Standalone operator commands
+
+Build with `cargo build --locked -p garmin-fit-extractor-api --bin runs-reset`. The API remains the package's `default-run`; the Docker image copies `/usr/local/bin/runs-reset` separately and keeps the API entrypoint unchanged.
+
+The operator must obtain the **actual** database name, PostgreSQL system identifier, PostgreSQL 18 version, and SHA-256 of the exact `data_directory` string through a separately verified administrative connection. Do not derive these expected values from an unverified reset target. No ambient `DATABASE_URL` or application configuration is accepted.
+
+```sh
+# Inspect without mutation; no backup is required for this preliminary plan.
+runs-reset --database-url "$RESET_DATABASE_URL" --environment rehearsal \
+  --database runs_reset_rehearsal --system-id "$EXPECTED_SYSTEM_ID" \
+  --pgdata-sha256 "$EXPECTED_PGDATA_SHA256" --owner "$OWNER_UUID"
+
+# Stop affected imports/workers/downloads. Create a consistent, encrypted backup
+# containing original BYTEA, revisions, jobs, and protected state, and restore
+# it on a separately verified disposable target before confirming the backup.
+# The final plan must bind the actual backup artifact used by apply.
+runs-reset --database-url "$RESET_DATABASE_URL" --environment rehearsal \
+  --database runs_reset_rehearsal --system-id "$EXPECTED_SYSTEM_ID" \
+  --pgdata-sha256 "$EXPECTED_PGDATA_SHA256" --owner "$OWNER_UUID" \
+  --backup-file "$RESTRICTED_BACKUP" --backup-sha256 "$BACKUP_SHA256"
+
+# Read DIGEST from that final dry-run's JSON. This command permanently deletes
+# the selected Runs data. Execute only on an explicitly authorized target.
+runs-reset --database-url "$RESET_DATABASE_URL" --environment rehearsal \
+  --database runs_reset_rehearsal --system-id "$EXPECTED_SYSTEM_ID" \
+  --pgdata-sha256 "$EXPECTED_PGDATA_SHA256" --owner "$OWNER_UUID" \
+  --backup-file "$RESTRICTED_BACKUP" --backup-sha256 "$BACKUP_SHA256" \
+  --apply --confirm-environment rehearsal --confirm-scope "owner:$OWNER_UUID" \
+  --confirm-digest "$DIGEST" --confirm-backup --confirm-quiesced
+```
+
+Use `--all-runs` instead of `--owner` only for the explicit all-owner Runs scope; its confirmation is `--confirm-scope all-runs`. Source-less legacy deletion is a separate opt-in: add `--include-source-less-legacy` to both planning and apply, and append `:source-less-legacy` to the scope confirmation. Only legacy extractions classified as `running`, their matching legacy summaries, and matching running activity projections are selected. Unknown, failed/unclassified, and non-running legacy records remain protected. Native Runs and their matching v1 activity projections do not require this legacy opt-in.
+
+The fixed deletion allowlist, in FK order, is `runs_export_chunks`, `runs_exports`, `runs_estimate_dependencies`, `runs_estimates`, `runs_jobs`, `runs_revision_chunks`, `runs_manifests`, `runs_revisions`, `activities` (matching Runs projections only), `runs_activities`, `runs_sources`, `runs_import_reports`, `runs_tombstones`, `runs_legacy_summaries` (explicit legacy scope only), and `extractions` (explicit running legacy scope only). Entire selected owners' Runs export records are revoked and erased, including cross-activity selections and dependent estimates; unrelated owners' exports and all global `runs_slots` rows remain unchanged.
+
+Dry-run uses a repeatable-read, read-only transaction and reports sanitized identity, exact scope/allowlist, selected counts/content hashes/row bytes, original FIT byte totals, materialized export byte totals, job statuses/live leases, schema and migration checksums, executable SHA-256/application Runs versions, backup digest/metadata, and protected counts/content hashes. `rowBytes` measures PostgreSQL row representation, not reclaimed disk space. The canonical manifest digest binds all these inputs without embedding raw content or private paths.
+
+Apply explicitly uses READ COMMITTED, takes the same owner advisory locks used by Runs imports/deletion/export admission, then acquires stable-order `NOWAIT` table locks. Locks remain held through manifest recomputation, exact digest comparison, job/export/generation fencing, FK-order deletes, protected-content comparison, source SHA/size checks, orphan/reference checks, and commit. All application tables outside the allowlist and all unselected rows are protected. A changed owner set, schema, application binary/version, count/content hash, backup, target, or confirmation refuses apply. Global slots have no owner key, so any live global slot causes conservative refusal even for an owner-scoped reset. Export transport does not need a long-lived database transaction: its durable `runs_exports.meta.activeReads` UUID registry follows the Body and delivered bytes. Under held table locks, any affected export with a nonempty or malformed registry causes reset refusal; the manifest reports `affectedExportsWithActiveReads` without exposing UUIDs. Missing registry means empty. Transport-owned recovery can prove an owning process dead through same-scope absence/PID-birth mismatch in `meta.readProcesses` records `{scope,pid,incarnation}`. If bounded DB cleanup failed while the process remains alive, its process-local weak guard registry may instead prove the Body and all delivered bytes actually drained before atomically removing that exact durable entry. Unknown/foreign ownership stays blocked; elapsed time alone never proves a reader dead or buffers drained. Foreign-namespace/container recreation recovery requires an explicitly approved operator proof procedure targeting exact registry identities, not wholesale clearing. After normal drain or proved recovery, create a fresh plan. The reset tool never clears these registries to manufacture quiescence.
+
+Backup confirmation is not a phantom boolean: the file must be readable, regular, nonempty, owned by the effective operator UID, single-linked, and deny all group/other permissions. Symlinks are refused. Its actual SHA-256 and metadata bind the final plan, and the open file is rechecked before deletion and commit. The operator still owns coherent backup creation, encryption/retention policy, and verified restore evidence; a matching artifact digest does not prove restore correctness.
+
+No reset code creates, drops, truncates, or migrates a database, deletes users or volumes, or starts a service. It has no private temporary payload artifacts to clean. The reset command's output never includes database URLs, backup paths, row content, emails, tokens, or FIT bytes; errors are fixed reason codes.
+
 
 Single PostgreSQL backup covers original+derived dataใน proposed layout. If later external blobsถูกเลือก ต้องเพิ่ม coordinated immutable blob snapshot/manifest before DB snapshotและ orphan checks ไม่อ้างว่า DB dumpพอ
 

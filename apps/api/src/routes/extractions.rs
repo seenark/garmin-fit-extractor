@@ -1,5 +1,5 @@
-use axum::{Router, routing::any};
 use crate::{app::AppState, auth::AuthenticatedUser, error::ApiError};
+use axum::{Router, routing::any};
 
 /// Browser Runs clients use the versioned Runs API. FIT Coach routes remain independent.
 pub fn router() -> Router<AppState> {

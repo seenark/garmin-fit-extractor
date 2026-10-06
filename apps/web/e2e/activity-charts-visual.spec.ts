@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import type { NormalizedRun, RunDetail, RunMetrics, RunSegment } from "../src/lib/runs-types";
+import type { NormalizedRun, RunDetail, RunHistoricalThresholds, RunMetrics, RunSegment } from "../src/lib/runs-types";
 
 const activityId = "11111111-1111-4111-8111-111111111111";
 const summary: RunMetrics = { distanceMeters: 6000, timerTimeSeconds: 1599, elapsedTimeSeconds: 1629, movingTimeSeconds: null, averageSpeedMps: 4, averagePaceSecondsPerKm: 250, averageHeartRateBpm: 150, averagePowerWatts: 300.125, averageCadenceStepsPerMinute: null };
@@ -110,4 +110,67 @@ test("a missing sensor stream has no synthetic zero line or numeric chart axis",
   await expect(plots.nth(1).locator("svg")).toHaveCount(1);
   await expect(plots.nth(2).locator("svg")).toHaveCount(0);
   await expect(page.locator(".runs-chart-inspector dl > div").nth(2).locator("dd")).toHaveText("ไม่มีข้อมูล");
+});
+
+test("duplicate timestamps remain separately selectable by slider, arrows and native point inspection", async ({ page }) => {
+  const samples = [0, 4, 4, 8].map((elapsedSeconds, index) => ({
+    ...normalized.samples[index]!,
+    index, elapsedSeconds,
+    heartRateBpm: [120, 140, 175, 150][index]!,
+    powerWatts: [100, 200, 900.125, 300][index]!,
+    paceSecondsPerKm: [250, 260, 300, 270][index]!,
+    speedMps: 1000 / [250, 260, 300, 270][index]!,
+  }));
+  await openRun(page, { ...detail, normalized: { ...normalized, samples, laps: [] }, analysis: { ...detail.analysis!, segments: [] } });
+  const charts = page.locator(".runs-charts");
+  const slider = charts.locator('input[type="range"]');
+  const inspector = charts.locator(".runs-chart-inspector");
+  await slider.fill("1");
+  const keyboard = charts.locator(".runs-chart-interaction").first();
+  await keyboard.focus();
+  await page.keyboard.press("ArrowRight");
+  await expect(slider).toHaveValue("2");
+  await expect(inspector).toContainText("175 bpm");
+  await expect(inspector).toContainText("900.125 W");
+  await page.keyboard.press("ArrowRight");
+  await expect(slider).toHaveValue("3");
+  await page.keyboard.press("ArrowLeft");
+  await expect(slider).toHaveValue("2");
+  await slider.fill("2");
+  await expect(inspector).toContainText("300 s/km");
+  await slider.fill("0");
+  const hrPlot = charts.locator(".runs-chart-plot").nth(1);
+  const point = await hrPlot.locator("svg circle").nth(2).boundingBox();
+  expect(point).not.toBeNull();
+  await hrPlot.locator("svg").dispatchEvent("pointerdown", { clientX: point!.x + point!.width / 2, clientY: point!.y + point!.height / 2, pointerType: "mouse", bubbles: true });
+  await expect(slider).toHaveValue("2");
+  await expect(inspector).toContainText("175 bpm");
+  await expect(inspector).toContainText("900.125 W");
+});
+
+test("each target can independently dismiss and reopen its unchanged suggestions", async ({ page }) => {
+  const lt1: RunHistoricalThresholds["lt1"] = {
+    status: "insufficient_data", engineStatus: "experimental", researchBlocked: true,
+    method: { id: "running-dfa", version: "1.0.0", configurationHash: "suggestion-policy" }, targetDefinition: "VT proxy",
+    value: null, uncertainty: { interval: null, reason: "research_not_validated" }, reasons: ["RR_COVERAGE_LOW"],
+    evidence: { independentActivityCount: 1, startTime: normalized.startTime, endTime: normalized.endTime, ageDays: 0 }, trace: null,
+    suggestions: [{ reason: "RR_COVERAGE_LOW", message: "คำแนะนำ LT1 · optional" }],
+  };
+  await openRun(page, { ...detail, historicalThresholds: {
+    evidenceCutoff: normalized.endTime, computedAt: normalized.endTime,
+    lt1, lt2: { ...lt1, suggestions: [{ reason: "INSUFFICIENT_ACTIVITY_HISTORY", message: "คำแนะนำ LT2 · optional" }] },
+  } });
+  const lt1Aside = page.getByRole("complementary", { name: "คำแนะนำเสริม LT1", exact: true });
+  const lt2Aside = page.getByRole("complementary", { name: "คำแนะนำเสริม LT2", exact: true });
+  const original = await lt1Aside.locator("ul").textContent();
+  await lt1Aside.getByRole("button", { name: "ซ่อนคำแนะนำ LT1", exact: true }).click();
+  await expect(lt1Aside.locator("ul")).toBeHidden();
+  await expect(lt2Aside.locator("ul")).toBeVisible();
+  const reopen = lt1Aside.getByRole("button", { name: "แสดงคำแนะนำอีกครั้ง LT1", exact: true });
+  await expect(reopen).toHaveAttribute("aria-expanded", "false");
+  await reopen.focus();
+  await page.keyboard.press("Enter");
+  await expect(lt1Aside.locator("ul")).toBeVisible();
+  expect(await lt1Aside.locator("ul").textContent()).toBe(original);
+  await expect(lt1Aside.getByRole("button", { name: "ซ่อนคำแนะนำ LT1", exact: true })).toHaveAttribute("aria-expanded", "true");
 });

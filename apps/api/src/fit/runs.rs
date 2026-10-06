@@ -16,11 +16,16 @@ pub const DECODE_OPTIONS: &[&str] = &[
 
 // SHA-256 of the checked-in implementation. Update when these sources change.
 // Vendor digest: sorted src/**/*.rs relative path, NUL, bytes, NUL per file.
-pub const VENDOR_SOURCE_SHA256: &str = "5cba14de1b4f88f3c3a55d755d27ceb8e7fb782027e3786b347b2b1e0a597bf1";
-pub const PROFILE_SOURCE_SHA256: &str = "fe9695a0ee955c4cdfad275bf11bc83706bdd87868a497894f8327e527145f9e";
-pub const NORMALIZER_SOURCE_SHA256: &str = "37b2d91074e867440b7e942205729c47570ee4b91cb9fd67e81e3775631367db";
-pub const ARCHIVE_SOURCE_SHA256: &str = "73a6cb5e19a7e1610e185faad8f74b448327ba2ae59df80f284275535a751dd4";
-pub const RAW_PROJECTION_SOURCE_SHA256: &str = "3b983feaabf607b735170d6c58e442c39562c95de44da5f15df64c633583dff5";
+pub const VENDOR_SOURCE_SHA256: &str =
+    "5cba14de1b4f88f3c3a55d755d27ceb8e7fb782027e3786b347b2b1e0a597bf1";
+pub const PROFILE_SOURCE_SHA256: &str =
+    "fe9695a0ee955c4cdfad275bf11bc83706bdd87868a497894f8327e527145f9e";
+pub const NORMALIZER_SOURCE_SHA256: &str =
+    "ad785913c62795a0903be63ce6bd02f6bf08df2be2e1b777540f1b2373ea32bd";
+pub const ARCHIVE_SOURCE_SHA256: &str =
+    "b6fd415c583265a5e2ea66f9be749f2aeec0a5c1aacf76314728a11a19b63373";
+pub const RAW_PROJECTION_SOURCE_SHA256: &str =
+    "f10c17926de35eac17b5b0ef7505cb79e31968fc4ed3f903a41a04dbf3d3bce7";
 pub const JSON_FLOAT_ROUNDTRIP: bool = true;
 
 /// Actual implementation identifiers shared by decode and stored revisions.

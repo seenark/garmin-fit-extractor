@@ -2,6 +2,7 @@
 name = "garmin-fit-extractor-api"
 version = "0.1.0"
 edition = "2024"
+default-run = "garmin-fit-extractor-api"
 
 [lib]
 path = "src/lib.rs"

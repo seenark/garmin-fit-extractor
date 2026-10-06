@@ -1,8 +1,8 @@
+use futures_util::FutureExt;
 use garmin_fit_extractor_api::{
     db::{self, HistoryOrder, NewFailure, NewSuccess},
     model::ExtractionStatus,
 };
-use futures_util::FutureExt;
 use sqlx::{Connection, Row};
 use std::{future::Future, panic::AssertUnwindSafe, time::Duration};
 
@@ -15,11 +15,17 @@ async fn run_in_schema(schema: TestSchema, test: impl Future<Output = ()>) {
     let outcome = AssertUnwindSafe(test).catch_unwind().await;
     tokio::time::timeout(Duration::from_secs(10), async {
         let mut connection = sqlx::PgConnection::connect(&schema.database_url).await?;
-        sqlx::query(sqlx::AssertSqlSafe(format!("DROP SCHEMA {} CASCADE", schema.name)))
-            .execute(&mut connection).await?;
+        sqlx::query(sqlx::AssertSqlSafe(format!(
+            "DROP SCHEMA {} CASCADE",
+            schema.name
+        )))
+        .execute(&mut connection)
+        .await?;
         connection.close().await
-    }).await.expect("owned DB schema cleanup completes")
-        .expect("owned DB schema cleanup succeeds");
+    })
+    .await
+    .expect("owned DB schema cleanup completes")
+    .expect("owned DB schema cleanup succeeds");
     if let Err(panic) = outcome {
         std::panic::resume_unwind(panic);
     }
@@ -28,22 +34,40 @@ async fn run_in_schema(schema: TestSchema, test: impl Future<Output = ()>) {
 async fn temporary_database_url() -> (TestSchema, String) {
     let database_url = std::env::var("TEST_DATABASE_URL")
         .expect("TEST_DATABASE_URL must point to the approved disposable PostgreSQL database");
-    let mut connection = sqlx::PgConnection::connect(&database_url).await.expect("database connects");
+    let mut connection = sqlx::PgConnection::connect(&database_url)
+        .await
+        .expect("database connects");
     let directory: String = sqlx::query_scalar("SHOW data_directory")
-        .fetch_one(&mut connection).await.expect("database identity");
+        .fetch_one(&mut connection)
+        .await
+        .expect("database identity");
     let expected_directory = std::env::var("PGDATA").expect("approved disposable PGDATA");
-    assert_eq!(directory, expected_directory, "verify the disposable cluster before creating a schema");
+    assert_eq!(
+        directory, expected_directory,
+        "verify the disposable cluster before creating a schema"
+    );
     let version: String = sqlx::query_scalar("SHOW server_version_num")
-        .fetch_one(&mut connection).await.expect("PostgreSQL version");
+        .fetch_one(&mut connection)
+        .await
+        .expect("PostgreSQL version");
     assert!((180000..190000).contains(&version.parse::<i32>().unwrap()));
     // Only a fixed prefix and UUID hex enter schema identifiers.
     let name = format!("db_{}", uuid::Uuid::new_v4().simple());
     sqlx::query(sqlx::AssertSqlSafe(format!("CREATE SCHEMA {name}")))
-        .execute(&mut connection).await.expect("owned test schema");
-    let schema = TestSchema { database_url: database_url.clone(), name: name.clone() };
-    connection.close().await.expect("identity connection closes");
+        .execute(&mut connection)
+        .await
+        .expect("owned test schema");
+    let schema = TestSchema {
+        database_url: database_url.clone(),
+        name: name.clone(),
+    };
+    connection
+        .close()
+        .await
+        .expect("identity connection closes");
     let mut url = url::Url::parse(&database_url).expect("database URL");
-    url.query_pairs_mut().append_pair("options", &format!("-csearch_path={name}"));
+    url.query_pairs_mut()
+        .append_pair("options", &format!("-csearch_path={name}"));
     (schema, url.to_string())
 }
 fn test_user(slug: &str) -> uuid::Uuid {
@@ -98,16 +122,16 @@ async fn migrates_and_persists_success_and_failure_with_their_required_shapes() 
         let pool = db::connect(&url)
             .await
             .expect("database should connect and migrate");
-        
+
         seed_user(&pool, "default").await;
-    
+
         let succeeded = db::insert_success(&pool, success("morning.fit"))
             .await
             .expect("successful extraction should persist");
         let failed = db::insert_failure(&pool, failure("broken.fit"))
             .await
             .expect("failed extraction should persist");
-    
+
         assert_eq!(succeeded.status, ExtractionStatus::Succeeded);
         assert!(succeeded.error.is_none());
         assert_eq!(failed.status, ExtractionStatus::Failed);
@@ -130,7 +154,7 @@ async fn migrates_and_persists_success_and_failure_with_their_required_shapes() 
                 .bytes()
                 .all(|byte| byte.is_ascii_digit())
         );
-    
+
         let stored = db::get_stored(&pool, test_user("default"), succeeded.id)
             .await
             .expect("stored row should be read")
@@ -143,14 +167,15 @@ async fn migrates_and_persists_success_and_failure_with_their_required_shapes() 
             stored.raw_json.as_deref(),
             Some(r#"[{"kind":"session","fields":[]}]"#)
         );
-    
+
         let failed_stored = db::get_stored(&pool, test_user("default"), failed.id)
             .await
             .expect("failed row should be read")
             .expect("failed row should exist");
         assert!(failed_stored.normalized_json.is_none());
         assert!(failed_stored.raw_json.is_none());
-    }).await;
+    })
+    .await;
 }
 
 #[tokio::test]
@@ -160,7 +185,7 @@ async fn lists_summaries_in_fixed_width_descending_timestamp_order_without_json_
         let pool = db::connect(&url)
             .await
             .expect("database should connect and migrate");
-        
+
         seed_user(&pool, "default").await;
         seed_user(&pool, "other").await;
         let first = db::insert_success(&pool, success("first.fit"))
@@ -178,7 +203,7 @@ async fn lists_summaries_in_fixed_width_descending_timestamp_order_without_json_
         )
         .await
         .expect("other-user extraction should persist");
-    
+
         sqlx::query("UPDATE extractions SET created_at = $1, activity_date = $2 WHERE id = $3")
             .bind("2026-07-27T10:00:00.000Z")
             .bind("2026-07-28T10:00:00.000Z")
@@ -193,7 +218,7 @@ async fn lists_summaries_in_fixed_width_descending_timestamp_order_without_json_
             .execute(&pool)
             .await
             .expect("second timestamp should be controlled");
-    
+
         let page = db::list(&pool, test_user("default"), 10, 0, HistoryOrder::Desc)
             .await
             .expect("page should load");
@@ -204,7 +229,7 @@ async fn lists_summaries_in_fixed_width_descending_timestamp_order_without_json_
             page.items.iter().map(|item| item.id).collect::<Vec<_>>(),
             vec![first.id, second.id, undated.id]
         );
-    
+
         let ascending = db::list(&pool, test_user("default"), 10, 0, HistoryOrder::Asc)
             .await
             .expect("ascending page should load");
@@ -216,13 +241,13 @@ async fn lists_summaries_in_fixed_width_descending_timestamp_order_without_json_
                 .collect::<Vec<_>>(),
             vec![second.id, first.id, undated.id]
         );
-    
+
         let other_page = db::list(&pool, test_user("other"), 10, 0, HistoryOrder::Desc)
             .await
             .expect("other-user page should load");
         assert_eq!(other_page.total, 1);
         assert_eq!(other_page.items[0].id, other.id);
-    
+
         let blobs_selected =
             sqlx::query("SELECT normalized_json, raw_json FROM extractions WHERE id = $1")
                 .bind(first.id.to_string())
@@ -235,7 +260,8 @@ async fn lists_summaries_in_fixed_width_descending_timestamp_order_without_json_
                 .is_ok()
         );
         assert!(blobs_selected.try_get::<String, _>("raw_json").is_ok());
-    }).await;
+    })
+    .await;
 }
 
 #[tokio::test]
@@ -245,7 +271,7 @@ async fn deletes_individual_and_all_rows_and_persists_across_connections() {
         let pool = db::connect(&url)
             .await
             .expect("database should connect and migrate");
-        
+
         seed_user(&pool, "default").await;
         let database_name = sqlx::query_scalar::<_, String>("SELECT current_database()")
             .fetch_one(&pool)
@@ -264,7 +290,7 @@ async fn deletes_individual_and_all_rows_and_persists_across_connections() {
         let two = db::insert_failure(&pool, failure("two.fit"))
             .await
             .expect("second extraction should persist");
-    
+
         assert!(
             db::delete_one(&pool, test_user("default"), one.id)
                 .await
@@ -281,7 +307,7 @@ async fn deletes_individual_and_all_rows_and_persists_across_connections() {
                 .expect("missing lookup should succeed")
                 .is_none()
         );
-    
+
         drop(pool);
         let reopened = db::connect(&url)
             .await
@@ -311,7 +337,8 @@ async fn deletes_individual_and_all_rows_and_persists_across_connections() {
                 .total,
             0
         );
-    }).await;
+    })
+    .await;
 }
 
 #[tokio::test]
@@ -321,8 +348,7 @@ async fn migration_rejects_rows_that_mix_success_and_failure_payloads() {
         let pool = db::connect(&url)
             .await
             .expect("database should connect and migrate");
-        
-    
+
         sqlx::query(
             "INSERT INTO users (id, google_subject, email, created_at, updated_at)
              VALUES ($1, $2, $3, $4, $5)",
@@ -335,7 +361,7 @@ async fn migration_rejects_rows_that_mix_success_and_failure_payloads() {
         .execute(&pool)
         .await
         .expect("test user should persist");
-    
+
         let inconsistent = sqlx::query(
             "INSERT INTO extractions (
                 id, user_id, file_name, file_size_bytes, status, normalized_json, raw_json,
@@ -351,12 +377,13 @@ async fn migration_rejects_rows_that_mix_success_and_failure_payloads() {
         .bind("2026-07-27T10:00:00.000Z")
         .execute(&pool)
         .await;
-    
+
         assert!(
             inconsistent.is_err(),
             "table check must reject inconsistent rows"
         );
-    }).await;
+    })
+    .await;
 }
 
 #[tokio::test]
@@ -364,10 +391,10 @@ async fn fit_coach_tables_indexes_and_owner_scoped_activity_contract() {
     let (_schema, url) = temporary_database_url().await;
     run_in_schema(_schema, async move {
         let pool = db::connect(&url).await.expect("database should connect");
-        
+
         seed_user(&pool, "default").await;
         seed_user(&pool, "other").await;
-    
+
         for table in [
             "activities",
             "oauth_login_requests",
@@ -404,7 +431,7 @@ async fn fit_coach_tables_indexes_and_owner_scoped_activity_contract() {
             .expect("index lookup should work");
             assert_eq!(exists, 1, "migration should create {index}");
         }
-    
+
         let oldest = db::insert_success(
             &pool,
             success_for("default", "old.fit", Some("2026-01-01T00:00:00.000Z")),
@@ -446,7 +473,7 @@ async fn fit_coach_tables_indexes_and_owner_scoped_activity_contract() {
                 .expect("cross-owner lookup should work")
                 .is_none()
         );
-    
+
         assert!(
             db::delete_one(&pool, test_user("default"), newest.id)
                 .await
@@ -458,7 +485,8 @@ async fn fit_coach_tables_indexes_and_owner_scoped_activity_contract() {
                 .expect("cascade lookup should work")
                 .is_none()
         );
-    }).await;
+    })
+    .await;
 }
 
 #[tokio::test]
@@ -466,7 +494,7 @@ async fn fit_coach_backfill_is_idempotent_and_omits_undated_or_failed_rows() {
     let (_schema, url) = temporary_database_url().await;
     run_in_schema(_schema, async move {
         let pool = db::connect(&url).await.expect("database should connect");
-        
+
         seed_user(&pool, "default").await;
         let dated = db::insert_success(
             &pool,
@@ -480,7 +508,7 @@ async fn fit_coach_backfill_is_idempotent_and_omits_undated_or_failed_rows() {
         let failed = db::insert_failure(&pool, failure("failed.fit"))
             .await
             .expect("failed extraction should persist");
-    
+
         sqlx::query("DELETE FROM activities")
             .execute(&pool)
             .await
@@ -507,7 +535,8 @@ async fn fit_coach_backfill_is_idempotent_and_omits_undated_or_failed_rows() {
                 .len(),
             1
         );
-    }).await;
+    })
+    .await;
 }
 
 #[tokio::test]
@@ -515,7 +544,7 @@ async fn fit_coach_oauth_values_are_hashed_and_refresh_rotation_revokes_old_toke
     let (_schema, url) = temporary_database_url().await;
     run_in_schema(_schema, async move {
         let pool = db::connect(&url).await.expect("database should connect");
-        
+
         seed_user(&pool, "default").await;
         let user = test_user("default");
         let now = db::timestamp_now();
@@ -598,5 +627,6 @@ async fn fit_coach_oauth_values_are_hashed_and_refresh_rotation_revokes_old_toke
             .await
             .expect("hash should be stored");
         assert_ne!(raw, "access-two");
-    }).await;
+    })
+    .await;
 }

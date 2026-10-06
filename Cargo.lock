@@ -1384,6 +1384,7 @@ name = "legacy-data-migrator"
 version = "0.1.0"
 dependencies = [
  "clap",
+ "garmin-fit-extractor-api",
  "libsqlite3-sys",
  "serde",
  "serde_json",
@@ -1391,6 +1392,8 @@ dependencies = [
  "sqlx",
  "thiserror 2.0.19",
  "tokio",
+ "url",
+ "uuid",
 ]
 
 [[package]]

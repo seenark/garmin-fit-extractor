@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useId, useState } from "react";
 import type {
   RunHistoricalThresholds,
   RunLatestThresholds,
@@ -44,17 +44,20 @@ function EvidenceDates({ cutoff, computed }: { cutoff: string | null; computed: 
 
 function Suggestions({ target, suggestions }: { target: string; suggestions: unknown[] }) {
   const [dismissed, setDismissed] = useState(false);
-  if (dismissed || suggestions.length === 0) return null;
+  const id = useId();
+  if (suggestions.length === 0) return null;
   return (
     <aside className="threshold-suggestions" aria-label={`คำแนะนำเสริม ${target}`}>
       <h4>คำแนะนำเสริม · {target}</h4>
+      <div id={id} hidden={dismissed}>
       <p className="muted">เลือกข้ามได้ ไม่ใช่คำสั่งให้ทดสอบความหนักสูงสุด</p>
       <ul>{suggestions.map((suggestion, index) => <li key={index}>
         {suggestion !== null && typeof suggestion === "object" && !Array.isArray(suggestion)
           ? <dl className="threshold-metadata">{Object.entries(suggestion).map(([field, value]) => <div key={field}><dt>{field}</dt><dd><DataValue value={value} /></dd></div>)}</dl>
           : <DataValue value={suggestion} />}
       </li>)}</ul>
-      <button type="button" className="quiet" onClick={() => setDismissed(true)} aria-label={`ซ่อนคำแนะนำ ${target}`}>ซ่อนคำแนะนำ</button>
+      </div>
+      <button type="button" className="quiet" onClick={() => setDismissed(!dismissed)} aria-label={`${dismissed ? "แสดงคำแนะนำอีกครั้ง" : "ซ่อนคำแนะนำ"} ${target}`} aria-expanded={!dismissed} aria-controls={id}>{dismissed ? "แสดงคำแนะนำอีกครั้ง" : "ซ่อนคำแนะนำ"}</button>
     </aside>
   );
 }

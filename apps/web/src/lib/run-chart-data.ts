@@ -27,7 +27,7 @@ export function buildRunChartData(
 ): RunChartData {
   const gapSeconds = 10;
   const rows: RunChartRow[] = [];
-  const events = normalized.timerEvents.filter((event) => finite(event.elapsedSeconds) && event.event === "timer")
+  const events = normalized.timerEvents.filter((event) => finite(event.elapsedSeconds) && event.event === 0)
     .sort((left, right) => left.elapsedSeconds! - right.elapsedSeconds!);
   let eventPosition = 0;
   let timerRunning: boolean | null = null;
@@ -43,11 +43,12 @@ export function buildRunChartData(
     let crossedPause = false;
     while (eventPosition < events.length && events[eventPosition]!.elapsedSeconds! <= seconds) {
       const type = events[eventPosition++]!.eventType;
-      if (type === "start") timerRunning = true;
-      else if (type?.startsWith("stop")) {
+      if (type === 0) timerRunning = true;
+      else if (type === 1 || type === 4 || type === 8 || type === 9) {
         timerRunning = false;
         crossedPause = true;
       }
+      else timerRunning = null;
     }
     if (rows.length && (crossedPause || previous === null || seconds <= previous || seconds - previous > gapSeconds)) {
       rows.push({ seconds, pace: null, heartRate: null, power: null, sourcePosition: null });
@@ -124,7 +125,7 @@ export function buildRunChartData(
 }
 
 /** Inspection always resolves against full-resolution source, never display rows. */
-export function inspectRunSample(data: RunChartData, seconds: number): RunSample | null {
+export function inspectRunSample(data: RunChartData, seconds: number, metric?: RunChartMetric, value?: number): RunSample | null {
   const samples = data.inspectable;
   if (!samples.length || !Number.isFinite(seconds)) return null;
   let low = 0;
@@ -134,7 +135,23 @@ export function inspectRunSample(data: RunChartData, seconds: number): RunSample
     if (samples[middle]!.elapsedSeconds! < seconds) low = middle + 1;
     else high = middle;
   }
-  const after = samples[Math.min(low, samples.length - 1)]!;
-  const before = samples[Math.max(0, low - 1)]!;
-  return seconds - before.elapsedSeconds! <= after.elapsedSeconds! - seconds ? before : after;
+  const afterIndex = Math.min(low, samples.length - 1);
+  const beforeIndex = Math.max(0, low - 1);
+  const nearestIndex = seconds - samples[beforeIndex]!.elapsedSeconds! <= samples[afterIndex]!.elapsedSeconds! - seconds ? beforeIndex : afterIndex;
+  const nearest = samples[nearestIndex]!;
+  if (!metric || value === undefined || !Number.isFinite(value)) return nearest;
+  const field = metric === "pace" ? "paceSecondsPerKm" : metric === "heartRate" ? "heartRateBpm" : "powerWatts";
+  let first = nearestIndex;
+  while (first > 0 && samples[first - 1]!.elapsedSeconds === nearest.elapsedSeconds) first--;
+  let selected = nearest;
+  let distance = Infinity;
+  for (let index = first; index < samples.length && samples[index]!.elapsedSeconds === nearest.elapsedSeconds; index++) {
+    const candidate = samples[index]!;
+    const candidateValue = candidate[field];
+    if (finite(candidateValue) && Math.abs(candidateValue - value) < distance) {
+      selected = candidate;
+      distance = Math.abs(candidateValue - value);
+    }
+  }
+  return selected;
 }

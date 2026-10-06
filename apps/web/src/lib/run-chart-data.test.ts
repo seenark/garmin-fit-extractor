@@ -37,19 +37,54 @@ describe("normalized run chart consumer", () => {
     for (const index of [0, 99, 37, 38, 42, 53, 54, 55, 61, 62, 80, 81]) expect(positions).toContain(index);
     expect(chart.metadata.originalCount).toBe(100);
     expect(chart.metadata.displayCount).toBeLessThan(100);
-    expect(chart.metadata.method).toBe("boundary-preserving min/max buckets; no smoothing");
     expect(inspectRunSample(chart, 43.1)).toBe(source.samples[43]);
     expect(source.samples).toHaveLength(100);
   });
   test("timer events split paths even when no sample is recorded during the pause; untimed records also split paths", () => {
     const source = run([sample(0), sample(1, { elapsedSeconds: 8 }), sample(2, { elapsedSeconds: null }), sample(3, { elapsedSeconds: 9 })]);
     source.timerEvents = [
-      { index: 0, timestamp: null, elapsedSeconds: 2, event: "timer", eventType: "stop_all", sourceReferences: [] },
-      { index: 1, timestamp: null, elapsedSeconds: 6, event: "timer", eventType: "start", sourceReferences: [] },
+      { index: 0, timestamp: null, elapsedSeconds: 2, event: 0, eventType: 4, sourceReferences: [] },
+      { index: 1, timestamp: null, elapsedSeconds: 6, event: 0, eventType: 0, sourceReferences: [] },
     ];
     const chart = buildRunChartData(source);
     expect(chart.rows.map((row) => [row.seconds, row.sourcePosition])).toEqual([[0, 0], [8, null], [8, 1], [9, null], [9, 3]]);
     expect(chart.metadata.untimedCount).toBe(1);
     expect(inspectRunSample(chart, 8)?.index).toBe(1);
+  });
+  test("every native timer stop enum breaks a short pause even without a paused sample", () => {
+    for (const eventType of [1, 4, 8, 9]) {
+      const source = run([sample(0), sample(1, { elapsedSeconds: 8 })]);
+      source.timerEvents = [
+        { index: 0, timestamp: null, elapsedSeconds: 2, event: 0, eventType, sourceReferences: [] },
+        { index: 1, timestamp: null, elapsedSeconds: 6, event: 0, eventType: 0, sourceReferences: [] },
+      ];
+      const chart = buildRunChartData(source);
+      expect(chart.rows.map(row => [row.seconds, row.sourcePosition, row.heartRate])).toEqual([[0, 0, 150], [8, null, null], [8, 1, 150]]);
+      expect(inspectRunSample(chart, 8)).toBe(source.samples[1]);
+    }
+  });
+  test("pointer inspection preserves distinct native records with the same elapsed time", () => {
+    const source = run([
+      sample(0, { heartRateBpm: 100, powerWatts: 200 }),
+      sample(1, { elapsedSeconds: 8, heartRateBpm: 120, powerWatts: 240 }),
+      sample(2, { elapsedSeconds: 8, heartRateBpm: 180, powerWatts: 360 }),
+      sample(3, { elapsedSeconds: 10, heartRateBpm: 160, powerWatts: 300 }),
+    ]);
+    const chart = buildRunChartData(source);
+    expect(inspectRunSample(chart, 8, "heartRate", 179)).toBe(source.samples[2]);
+    expect(inspectRunSample(chart, 8, "power", 241)).toBe(source.samples[1]);
+    expect(chart.inspectable.map(item => item.index)).toEqual([0, 1, 2, 3]);
+    expect(source.samples.map(item => item.elapsedSeconds)).toEqual([0, 8, 8, 10]);
+  });
+  test("native unknown timer states do not fabricate a restart or hide recorded values", () => {
+    const source = run([sample(0), sample(1, { elapsedSeconds: 3, timerRunning: null }), sample(2, { elapsedSeconds: 4, timerRunning: null })]);
+    source.timerEvents = [
+      { index: 0, timestamp: null, elapsedSeconds: 0, event: 0, eventType: 0, sourceReferences: [] },
+      { index: 1, timestamp: null, elapsedSeconds: 2, event: 0, eventType: 1, sourceReferences: [] },
+      { index: 2, timestamp: null, elapsedSeconds: 3, event: 0, eventType: 253, sourceReferences: [] },
+    ];
+    const chart = buildRunChartData(source);
+    expect(chart.rows.map(row => [row.seconds, row.sourcePosition, row.heartRate])).toEqual([[0, 0, 150], [3, null, null], [3, 1, 150], [4, 2, 150]]);
+    expect(inspectRunSample(chart, 3)?.timerRunning).toBeNull();
   });
 });

@@ -13,7 +13,10 @@ fn main() -> Result<(), Box<dyn Error>> {
     if let Some(status) = garmin_fit_extractor_api::runs::process::child_mode() {
         std::process::exit(status);
     }
-    tokio::runtime::Builder::new_multi_thread().enable_all().build()?.block_on(async_main())
+    tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()?
+        .block_on(async_main())
 }
 
 async fn async_main() -> Result<(), Box<dyn Error>> {

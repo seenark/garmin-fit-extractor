@@ -26,7 +26,7 @@ function Timeline({ data, metric, domain, selected, laps, segments, onInspect, o
   selected: number | null;
   laps: readonly RunLap[];
   segments: readonly RunSegment[];
-  onInspect: (seconds: number) => void;
+  onInspect: (sampleIndex: number) => void;
   onKeyDown: (event: KeyboardEvent<HTMLDivElement>) => void;
 }) {
   const rendered = useRef<ChartRenderContext<RunChartRow | RunSegment, number, number> | null>(null);
@@ -70,7 +70,9 @@ function Timeline({ data, metric, domain, selected, laps, segments, onInspect, o
     const plot = context.scene.chart;
     if (x < plot.x || x > plot.x + plot.width || y < plot.y || y > plot.y + plot.height) return;
     const seconds = context.scene.scales.x?.invert?.(x);
-    if (typeof seconds === "number") onInspect(seconds);
+    const value = context.scene.scales.y?.invert?.(y);
+    const sample = typeof seconds === "number" ? inspectRunSample(data, seconds, metric.key, typeof value === "number" ? value : undefined) : null;
+    if (sample) onInspect(sample.index);
   };
   const hasData = rows.some((row) => row[metric.key] !== null);
   return <section className="runs-chart-plot" aria-label={`${metric.label} timeline`}>
@@ -87,17 +89,13 @@ export function RunCharts({ normalized, segments }: RunChartsProps) {
   const id = useId();
   const data = useMemo(() => buildRunChartData(normalized, segments), [normalized, segments]);
   const [window, setWindow] = useState<[number, number] | null>(null);
-  const [inspected, setInspected] = useState<number | null>(null);
+  const [inspectedIndex, setInspectedIndex] = useState<number | null>(null);
   const [showSegments, setShowSegments] = useState(true);
   const full = data.domain;
   const domain: [number, number] = window ?? (full ? [full[0], Math.max(full[1], full[0] + 1)] : [0, 1]);
-  const sample = inspectRunSample(data, inspected ?? domain[0]);
+  const sample = inspectedIndex === null ? inspectRunSample(data, domain[0]) : data.original[inspectedIndex] ?? null;
   const seconds = sample?.elapsedSeconds ?? null;
   const selectedPosition = sample ? data.inspectable.indexOf(sample) : 0;
-  const select = (value: number) => {
-    const next = inspectRunSample(data, Math.min(domain[1], Math.max(domain[0], value)));
-    if (next) setInspected(next.elapsedSeconds);
-  };
   const zoom = (factor: number) => {
     if (!full || full[0] === full[1]) return;
     const width = Math.min(full[1] - full[0], Math.max(1, (domain[1] - domain[0]) * factor));
@@ -112,13 +110,13 @@ export function RunCharts({ normalized, segments }: RunChartsProps) {
       const direction = event.key === "ArrowLeft" ? -1 : 1;
       const next = data.inspectable[Math.min(data.inspectable.length - 1, Math.max(0, selectedPosition + direction))];
       if (next?.elapsedSeconds != null) {
-        setInspected(next.elapsedSeconds);
+        setInspectedIndex(next.index);
         if (next.elapsedSeconds < domain[0] || next.elapsedSeconds > domain[1]) reset();
       }
     } else if (event.key === "+" || event.key === "=") { event.preventDefault(); zoom(0.5); }
     else if (event.key === "-") { event.preventDefault(); zoom(2); }
     else if (event.key.toLowerCase() === "r" || event.key === "Escape") { event.preventDefault(); reset(); }
-    else if (event.key === "Home" || event.key === "End") { event.preventDefault(); reset(); setInspected(event.key === "Home" ? full?.[0] ?? null : full?.[1] ?? null); }
+    else if (event.key === "Home" || event.key === "End") { event.preventDefault(); reset(); setInspectedIndex((event.key === "Home" ? data.inspectable[0] : data.inspectable.at(-1))?.index ?? null); }
   };
   const focusInterval = (start: number | null, end: number | null) => {
     if (!full || !numeric(start) || !numeric(end) || end <= start) return;
@@ -126,7 +124,7 @@ export function RunCharts({ normalized, segments }: RunChartsProps) {
     const right = Math.min(full[1], end);
     if (right <= left) return;
     setWindow([left, right]);
-    setInspected(left);
+    setInspectedIndex(inspectRunSample(data, left)?.index ?? null);
   };
   const inSegments = numeric(seconds) ? segments.filter((segment) => seconds >= segment.startElapsedSeconds && seconds <= segment.endElapsedSeconds) : [];
   return <section className="runs-charts" aria-labelledby={`${id}-title`}>
@@ -137,9 +135,9 @@ export function RunCharts({ normalized, segments }: RunChartsProps) {
     <div className="runs-chart-legend"><span className="runs-chart-lap-key">เส้นประ: Garmin Lap ที่บันทึก</span><label><input type="checkbox" checked={showSegments} onChange={(event) => setShowSegments(event.target.checked)} /> แสดง Detected Segments</label><span>พื้นเขียว: ผ่านอย่างน้อยหนึ่ง target · พื้นแดงมีกรอบ: ไม่ผ่านทั้งสอง target</span></div>
     {full ? <>
       <p className="muted">ช่วง {clock(domain[0])}–{clock(domain[1])} · แตะหรือเลื่อนบนกราฟเพื่อตรวจค่า · ลูกศรเลือกจุด · + / − ซูม · R คืนช่วง</p>
-      <div className="runs-chart-timelines">{metrics.map((metric) => <Timeline key={metric.key} data={data} metric={metric} domain={domain} selected={seconds} laps={normalized.laps} segments={showSegments ? segments : []} onInspect={select} onKeyDown={keys} />)}</div>
+      <div className="runs-chart-timelines">{metrics.map((metric) => <Timeline key={metric.key} data={data} metric={metric} domain={domain} selected={seconds} laps={normalized.laps} segments={showSegments ? segments : []} onInspect={setInspectedIndex} onKeyDown={keys} />)}</div>
       <label className="runs-chart-sample-control" htmlFor={`${id}-sample`}>ตรวจจุดต้นฉบับตามเวลา
-        <input id={`${id}-sample`} type="range" min={0} max={Math.max(0, data.inspectable.length - 1)} value={selectedPosition} aria-valuetext={sample ? `${clock(seconds!)} · จุด ${sample.index}` : "ไม่มีข้อมูล"} onChange={(event) => { const next = data.inspectable[Number(event.target.value)]; if (next) { setInspected(next.elapsedSeconds); if (next.elapsedSeconds! < domain[0] || next.elapsedSeconds! > domain[1]) reset(); } }} />
+        <input id={`${id}-sample`} type="range" min={0} max={Math.max(0, data.inspectable.length - 1)} value={selectedPosition} aria-valuetext={sample ? `${clock(seconds!)} · จุด ${sample.index}` : "ไม่มีข้อมูล"} onChange={(event) => { const next = data.inspectable[Number(event.target.value)]; if (next) { setInspectedIndex(next.index); if (next.elapsedSeconds! < domain[0] || next.elapsedSeconds! > domain[1]) reset(); } }} />
       </label>
     </> : <p className="runs-chart-empty">ไม่มี sample ที่ทราบเวลา จึงไม่สร้างกราฟจากค่าเฉลี่ยหรือ Garmin Laps</p>}
     {sample && <div className="runs-chart-inspector" role="status" aria-live="polite" aria-atomic="true">
