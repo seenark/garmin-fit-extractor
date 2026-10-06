@@ -10,15 +10,23 @@
 
 ประวัติเรียงตาม start time ของกิจกรรม ไม่ใช่ upload time Checkbox เป็นการเลือกส่งออกอย่างชัดเจนและไม่เปลี่ยนหลักฐานที่ LT engine ใช้ การเลือกหน้านี้เพิ่มเฉพาะรายการบนหน้าปัจจุบัน การเปลี่ยนหน้าและการเรียงลำดับไม่เลือกเพิ่มหรือถอดรายการให้เอง ปุ่มล้างการเลือกเป็นวิธีล้าง selection ที่ชัดเจน เมื่อ selected ID ถูกลบหรือ server ปฏิเสธ export รายการที่เลือกยังอยู่เพื่อให้ผู้ใช้แก้ selection เอง
 
-การนำทางรายละเอียดอ่าน search จาก current router location ไม่ใช่ loader match ที่อาจยังค้างจากหน้าก่อนระหว่างรอโหลด จึงรักษา `order` และ `offset` ของ URL ปัจจุบันไว้ในลิงก์และลิงก์กลับประวัติ Regression test หน่วง ascending list response และคลิกลิงก์เดิมขณะ pending เพื่อไม่ซ่อนปัญหาด้วยการรอให้ href เปลี่ยนก่อน
+การเลือกในประวัติยังอยู่เมื่อเปิดรายละเอียดแล้วกลับมาประวัติภายในช่วงที่ผู้ใช้เดียวกันเข้าสู่ระบบอยู่ Selection อยู่ใน authenticated layout และแยกตาม user ID เมื่อออกจากระบบ ไม่มีผู้ใช้ที่เข้าสู่ระบบ หรือเปลี่ยนเจ้าของบัญชี การเลือกจะถูกล้าง รวมถึงการออกจากระบบบนหน้าสาธารณะที่ยังแสดงเนื้อหาได้ ไม่บันทึก selection ใน storage และไม่รับประกันว่าจะคงอยู่หลังโหลดหน้าใหม่หรือออกจาก authenticated layout
+
+การนำทางรายละเอียดอ่าน search จาก current router location ไม่ใช่ loader match ที่อาจยังค้างจากหน้าก่อนระหว่างรอโหลด จึงรักษา `order` และ `offset` ของ URL ปัจจุบันไว้ในลิงก์และลิงก์กลับประวัติ Regression test หน่วง ascending list response และคลิกลิงก์เดิมขณะ pending เพื่อไม่ซ่อนปัญหาด้วยการรอให้ href เปลี่ยนก่อน จากนั้นตรวจ checkbox และจำนวนที่เลือกหลังกลับประวัติ ตรวจการล้าง selection อย่างชัดเจน และตรวจว่าเจ้าของบัญชีใหม่ไม่รับ selection เดิมเมื่อ detail polling โหลดข้อมูลผู้ใช้ใหม่โดยไม่โหลดเอกสารทั้งหน้า
 
 ## Detail, charts และ LT
 
 รายละเอียดอ่าน coherent revision และ normalized streams ไม่โหลด decoded archive เพื่อวาดกราฟ Pace, HR และ Power ใช้แกนเวลาเดียวกัน มี inspector จาก samples ความละเอียดต้นฉบับ การซูม คืนช่วงเวลา และแยก Garmin laps จาก detected segments พร้อม target-specific eligibility/reasons ข้อมูลที่ขาด zero speed, timer pauses และช่องว่างเกิน 10 วินาทีไม่ถูกวาดเป็นเส้นต่อเนื่อง การลดจุดเป็น display-only boundary-preserving min/max buckets มี original/display count และชื่อวิธีบนหน้าจอ
 
+Timer events ใช้เลข enum จาก native normalized wire: `event: 0` คือ timer, `eventType: 0` คือ start และ `1`, `4`, `8`, `9` คือ stop เส้นกราฟตัดช่วง stop/start แม้ห่างกันไม่เกิน 10 วินาทีและไม่มี sample ระหว่างหยุด ค่า event type อื่นหรือ null คงสถานะ UNKNOWN ไม่ถือว่าเป็น start
+
+Inspector จำ `sample.index` ของ record ต้นฉบับ ไม่ใช้ elapsed time เป็น identity จึงเลือก record ที่ timestamp ซ้ำแยกกันได้ด้วย slider และลูกศร โดยไม่สร้างเวลาหรือ deduplicate ข้อมูล Pointer ใช้ค่า metric ต้นฉบับแยกจุดเวลาเดียวกัน และ cursor ของ Pace, HR, Power ยังคงเชื่อมด้วย elapsed time ของ record ที่เลือก
+
 ผล LT ใน detail เป็น historical snapshot ณ evidence cutoff ของกิจกรรมนั้น ไม่แทนด้วยผลล่าสุดของบัญชี LT1 และ LT2 ใช้ status `estimated`, `low_confidence` หรือ `insufficient_data` แยกกัน engine availability, experimental/research gate, context limitations, freshness และ job failure เป็นคนละข้อมูล ค่าระบบระบุว่าเป็น VT proxy ไม่ใช่ validated blood-lactate measurement ค่า device-reported แสดงแยกพร้อม provenance
 
 หน้า history แสดง latest attempt แยกจาก lastAvailable ของแต่ละ target ผลเก่าบอก activity ID, evidence cutoff, computed time และ stale อย่างชัดเจน ไม่ยกค่าจาก cutoff เก่าขึ้นเป็นค่าปัจจุบัน Trend เรียงตาม evidence cutoff ไม่ใช่ computed time ผู้ใช้เปิดดู method, parameters, actual trace, counts, input revision/hash, reasons และ limitations ได้ Suggestions เป็นตัวเลือกที่ปิดได้ ไม่ใช่ maximal prescription
+
+Suggestions ของ LT1 และ LT2 ซ่อนและเปิดอีกครั้งได้แยกกัน มีปุ่มระบุ target ใช้งานด้วย keyboard และ `aria-expanded`/`aria-controls` เนื้อหาและเหตุผลต้นฉบับคงเดิมเมื่อเปิดอีกครั้ง การซ่อน target หนึ่งไม่ซ่อนอีก target
 
 History และ detail ตรวจสถานะใหม่ทุก 3 วินาทีเมื่อกิจกรรมยัง queued/processing หรือ historical stage ยัง pending โดยตรวจต่อแม้ normalized revision พร้อมแล้ว หาก update failed จะแยกข้อผิดพลาดจากผลก่อนหน้าที่ stale กิจกรรมเดิมที่ไม่มี Original FIT ระบุ `sourceUnavailable` และข้อจำกัดอย่างตรงไปตรงมา ไม่มีการสร้าง FIT, normalized streams หรือ trace ที่ไม่เคยมีขึ้นมา และไม่เปิด reprocess
 

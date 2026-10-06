@@ -9,6 +9,7 @@ import { ApiError } from "../lib/api";
 import { deleteRun, getLatestThresholds, getThresholdTrend, listRuns, validateHistorySearch } from "../lib/runs-api";
 import type { RunLatestThresholds, RunOrder, RunPage, RunSummary, RunTrend } from "../lib/runs-types";
 import { formatApiError } from "../lib/copy";
+import { useRunSelection } from "../components/run-selection";
 interface HistorySearch { offset: number; order: RunOrder; }
 interface HistoryData {
   page: RunPage;
@@ -64,7 +65,7 @@ function HistoryPage() {
     try { await request; }
     finally { if (inFlight.current === request) inFlight.current = null; }
   }, []);
-  const [selected, setSelected] = useState<Set<string>>(() => new Set());
+  const [selected, setSelected] = useRunSelection();
   const [target, setTarget] = useState<RunSummary | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);

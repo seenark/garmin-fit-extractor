@@ -98,6 +98,14 @@ async function history(page: Page) {
 
 test("pending ascending history keeps current URL order when opening an existing detail link", async ({ page }) => {
   await authenticate(page);
+  let currentUser: { id: string; email: string; displayName: string } | null = {
+    id: "runner", email: "runner@example.test", displayName: "Runner",
+  };
+  await page.route("**/api/v1/auth/me", route => route.fulfill({ json: { user: currentUser, isAdmin: false } }));
+  await page.route("**/api/v1/auth/logout", route => {
+    currentUser = null;
+    return route.fulfill({ status: 204 });
+  });
   let releaseAscending!: () => void;
   const ascendingGate = new Promise<void>(resolve => { releaseAscending = resolve; });
   let ascendingRequests = 0;
@@ -106,14 +114,19 @@ test("pending ascending history keeps current URL order when opening an existing
     if (url.searchParams.get("order") === "asc" && ascendingRequests++ === 0) await ascendingGate;
     await route.fulfill({ json: { items: [rows[0]], total: 1, limit: 50, offset: 0 } });
   });
+  let detailPending = false;
   await page.route(`**/api/v2/runs/${firstId}`, route => route.fulfill({ json: {
-    ...rows[0], sourceUnavailable: true, revisionId: null,
+    ...rows[0], sourceUnavailable: !detailPending, revisionId: null,
+    processing: { ...rows[0].processing, historyStatus: detailPending ? "pending" : "ready" },
     normalized: null, analysis: null, historicalThresholds: null,
-    fidelityWarnings: ["LEGACY_SOURCE_UNAVAILABLE"],
+    fidelityWarnings: detailPending ? [] : ["LEGACY_SOURCE_UNAVAILABLE"],
   } }));
   try {
     await page.goto("/history?offset=0&order=desc");
     await expect(page.getByTestId("history-table")).toBeVisible();
+    const selectedRun = page.getByRole("checkbox", { name: `เลือกกิจกรรม ${firstId}`, exact: true });
+    await selectedRun.check();
+    await expect(page.getByText("เลือก 1 กิจกรรม", { exact: true })).toBeVisible();
     await page.getByLabel("เรียงลำดับ").selectOption("asc");
     await expect(page).toHaveURL(/\/history\?.*order=asc/);
     // Ascending data stays blocked. Do not wait for link rewriting: click the still-rendered row.
@@ -122,6 +135,28 @@ test("pending ascending history keeps current URL order when opening an existing
     await page.getByRole("link", { name: "กลับไปประวัติ", exact: true }).click();
     await expect(page).toHaveURL(/\/history\?.*order=asc/);
     await expect(page.getByLabel("เรียงลำดับ")).toHaveValue("asc");
+    await expect(selectedRun).toBeChecked();
+    await expect(page.getByText("เลือก 1 กิจกรรม", { exact: true })).toBeVisible();
+    await page.getByRole("button", { name: "ล้างการเลือก", exact: true }).click();
+    await expect(selectedRun).not.toBeChecked();
+    await expect(page.getByText("เลือก 0 กิจกรรม", { exact: true })).toBeVisible();
+
+    // Detail polling revalidates the root loader without a document reload.
+    await selectedRun.check();
+    detailPending = true;
+    await page.getByTestId("history-table").getByRole("link", { name: "เปิดดู" }).click();
+    await expect(page.getByRole("link", { name: "กลับไปประวัติ", exact: true })).toBeVisible();
+    currentUser = { id: "next-runner", email: "next@example.test", displayName: "Next Runner" };
+    await expect(page.getByText("Next Runner", { exact: true })).toBeVisible();
+    await page.getByRole("link", { name: "กลับไปประวัติ", exact: true }).click();
+    await expect(selectedRun).not.toBeChecked();
+    await expect(page.getByText("เลือก 0 กิจกรรม", { exact: true })).toBeVisible();
+
+    // Logout on a public sibling removes the owner while its outlet stays visible.
+    await selectedRun.check();
+    await page.getByRole("link", { name: "Runner’s Garage กลับหน้าหลัก", exact: true }).click();
+    await page.getByRole("button", { name: "ออกจากระบบ", exact: true }).click();
+    await expect(page.getByRole("button", { name: "เข้าสู่ระบบ", exact: true })).toBeVisible();
   } finally {
     releaseAscending();
   }
